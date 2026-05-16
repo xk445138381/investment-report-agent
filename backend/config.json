@@ -1,0 +1,97 @@
+{
+  "version": "1.0",
+  "global": {
+    "language": "zh-CN",
+    "default_market": "auto",
+    "data_priority": "local_first",
+    "cache_root": "~/.investment_report_agent/cache",
+    "max_report_token_budget": 200000
+  },
+  "llm_providers": {
+    "provider_deep": {
+      "provider": "anthropic",
+      "model": "claude-opus-4-7",
+      "temperature": 0.3,
+      "max_tokens": 16000,
+      "api_key_source": "env:ANTHROPIC_API_KEY",
+      "timeout_seconds": 120
+    },
+    "provider_quick": {
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "temperature": 0.3,
+      "max_tokens": 8000,
+      "api_key_source": "env:ANTHROPIC_API_KEY",
+      "timeout_seconds": 60
+    }
+  },
+  "pipelines": {
+    "deep_dive": {
+      "name": "深度研报",
+      "phases": {
+        "phase_1": {
+          "parallel": true,
+          "agents": ["price_data", "financial_data", "news_data", "macro_data"]
+        },
+        "phase_2": {
+          "parallel": true,
+          "agents": ["financial_analysis", "valuation", "industry_competition", "corporate_governance"]
+        },
+        "phase_3": {
+          "parallel": false,
+          "agents": ["bull_case", "bear_case", "risk_judge"],
+          "debate_rounds": 2
+        },
+        "phase_4": {
+          "parallel": false,
+          "agents": ["section_writer", "chart_generator", "title_summary"],
+          "export": ["pdf"]
+        }
+      }
+    },
+    "brief": {
+      "name": "快速简报",
+      "phases": {
+        "phase_1": {
+          "parallel": true,
+          "agents": ["price_data", "financial_data", "news_data"]
+        },
+        "phase_2": {
+          "parallel": true,
+          "agents": ["financial_analysis", "valuation"]
+        },
+        "phase_3": {
+          "parallel": false,
+          "agents": ["bull_case", "bear_case", "risk_judge"],
+          "debate_rounds": 1
+        },
+        "phase_4": {
+          "parallel": false,
+          "agents": ["section_writer", "title_summary"],
+          "export": ["pdf"]
+        }
+      }
+    }
+  },
+  "agents": {
+    "price_data": {"llm": "provider_quick", "output_schema": "PriceDataResult", "timeout_seconds": 60},
+    "financial_data": {"llm": "provider_quick", "output_schema": "FinancialDataResult", "timeout_seconds": 60},
+    "news_data": {"llm": "provider_quick", "tools": ["get_recent_news"], "output_schema": "NewsAggregation", "timeout_seconds": 60},
+    "macro_data": {"llm": "provider_quick", "output_schema": "MacroDataResult", "timeout_seconds": 60},
+    "financial_analysis": {"llm": "provider_deep", "python_calculator": "financial_health_calculator", "output_schema": "FinancialHealthResult", "timeout_seconds": 120},
+    "valuation": {"llm": "provider_deep", "python_calculator": "valuation_engine", "output_schema": "ValuationResult", "timeout_seconds": 180},
+    "industry_competition": {"llm": "provider_deep", "output_schema": "IndustryCompetitionResult", "timeout_seconds": 120},
+    "corporate_governance": {"llm": "provider_deep", "output_schema": "GovernanceResult", "timeout_seconds": 120},
+    "bull_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 120},
+    "bear_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 120},
+    "risk_judge": {"llm": "provider_deep", "output_schema": "RiskJudgeResult", "timeout_seconds": 120},
+    "section_writer": {"llm": "provider_deep", "output_schema": "ReportSections", "timeout_seconds": 300},
+    "chart_generator": {"llm": "provider_quick", "output_schema": "ChartOutputs", "timeout_seconds": 60},
+    "title_summary": {"llm": "provider_quick", "output_schema": "ReportMetadata", "timeout_seconds": 30}
+  },
+  "logging": {
+    "level": "INFO",
+    "output": ["console", "file"],
+    "file_path": "~/.investment_report_agent/logs/agent.log"
+  }
+}

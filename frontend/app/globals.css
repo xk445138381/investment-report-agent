@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* ── 和纸底色 ── */
+  --color-bg-warm: #FAF8F5;
+  --color-bg-surface: #F3F0EC;
+  --color-bg-elevated: #FFFFFF;
+
+  /* ── 墨色文字 ── */
+  --color-ink-primary: #2D2420;
+  --color-ink-secondary: #6B5E58;
+  --color-ink-tertiary: #9E9288;
+
+  /* ── 朱砂强调 ── */
+  --color-accent: #C04A1A;
+  --color-accent-hover: #A03D12;
+  --color-accent-soft: #F5E6DD;
+
+  /* ── 数据色板 ── */
+  --color-data-positive: #3D6B4F;
+  --color-data-negative: #C04A1A;
+  --color-data-neutral: #9E9288;
+  --color-data-series-1: #2D2420;
+  --color-data-series-2: #C04A1A;
+  --color-data-series-3: #6B5E58;
+  --color-data-series-4: #D4C5B9;
+  --color-data-series-5: #3D6B4F;
+
+  /* ── 边框分割 ── */
+  --color-border-light: #E8E2DB;
+  --color-border: #D4C5B9;
+
+  /* ── 字体系统 ── */
+  --font-serif: "Noto Serif SC", "Source Han Serif SC", ui-serif, Georgia, serif;
+  --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, monospace;
+  --font-display: "Playfair Display", "Noto Serif SC", ui-serif, serif;
+
+  /* ── 间距 8pt 网格 (作为 Tailwind 扩展) ── */
+  --spacing-section: 2rem;
+  --spacing-block: 3rem;
+  --spacing-page: 6rem;
+}
+
+/* ── 基础样式 ── */
+body {
+  background: var(--color-bg-warm);
+  color: var(--color-ink-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── 排版 ── */
+h1, h2, h3, h4 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+}
+
+h1 { font-size: 1.75rem; }   /* 28px */
+h2 { font-size: 1.375rem; }  /* 22px */
+h3 { font-size: 1.125rem; }  /* 18px */
+
+p {
+  line-height: 1.8;
+  font-size: 1rem;           /* 16px */
+}
+
+/* ── 数据大字报 ── */
+.data-headline {
+  font-family: var(--font-display);
+  font-size: 2.25rem;        /* 36px */
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+}
+
+/* ── Ticker/代码块 ── */
+.ticker, code, pre {
+  font-family: var(--font-mono);
+}
+
+/* ── 分割线 ── */
+hr {
+  border: none;
+  border-top: 1px solid var(--color-border-light);
+  margin: var(--spacing-section) 0;
+}
+
+/* ── 链接 ── */
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+a:hover { color: var(--color-accent-hover); }
+
+/* ── 选中样式 ── */
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-ink-primary);
+}
