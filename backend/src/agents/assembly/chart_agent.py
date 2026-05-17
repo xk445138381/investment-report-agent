@@ -6,6 +6,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+# CJK font support — requires Noto Sans CJK or SimHei installed on system
+plt.rcParams["font.sans-serif"] = ["Noto Sans CJK SC", "SimHei", "Microsoft YaHei", "DejaVu Sans"]
+plt.rcParams["axes.unicode_minus"] = False
+
 
 async def run_chart_agent(ticker, company_name, prices, financials, ctx_state=None):
     """Generate charts for the report. Returns list of ChartOutput dicts."""
