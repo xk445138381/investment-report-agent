@@ -208,6 +208,59 @@ class Orchestrator:
                 valuation=ctx.state.get("valuation", {}),
             )
 
+        # Phase 2: Analysis agents
+        if agent_name == "financial_analysis":
+            from agents.analysis.financial_analysis_agent import run_financial_analysis_agent
+            return await run_financial_analysis_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                financials=ctx.state.get("_financials", []),
+                prices=ctx.state.get("_prices", []),
+            )
+        if agent_name == "industry_competition":
+            from agents.analysis.industry_agent import run_industry_agent
+            return await run_industry_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                financials=ctx.state.get("_financials", []),
+                prices=ctx.state.get("_prices", []),
+            )
+        if agent_name == "corporate_governance":
+            from agents.analysis.governance_agent import run_governance_agent
+            return await run_governance_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                financials=ctx.state.get("_financials", []),
+                prices=ctx.state.get("_prices", []),
+            )
+
+        # Phase 1: Remaining data agents
+        if agent_name == "news_data":
+            from agents.data.news_agent import run_news_agent
+            return await run_news_agent(ticker=ctx.ticker, company_name=ctx.company_name)
+        if agent_name == "macro_data":
+            from agents.data.macro_agent import run_macro_agent
+            return await run_macro_agent(ticker=ctx.ticker, company_name=ctx.company_name)
+
+        # Phase 4: Assembly agents
+        if agent_name == "section_writer":
+            from agents.assembly.section_writer_agent import run_section_writer
+            return await run_section_writer(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                ctx_state=ctx.state,
+            )
+        if agent_name == "chart_generator":
+            from agents.assembly.chart_agent import run_chart_agent
+            return await run_chart_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                prices=ctx.state.get("_prices", []),
+                financials=ctx.state.get("_financials", []),
+                ctx_state=ctx.state,
+            )
+        if agent_name == "title_summary":
+            from agents.assembly.summary_agent import run_summary_agent
+            return await run_summary_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                ctx_state=ctx.state,
+            )
+
         return {"note": f"Agent '{agent_name}' not yet implemented (stub)"}
 
 
