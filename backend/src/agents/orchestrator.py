@@ -159,14 +159,29 @@ class Orchestrator:
     async def _dispatch_agent(self, ctx: AgentContext, agent_name: str) -> dict:
         """Route to concrete agent implementation if available."""
         # Phase 1: Data agents
+        # Phase 1: Data agents
         if agent_name == "financial_data":
             from agents.data.financial_agent import run_financial_agent
             return await run_financial_agent(
                 ticker=ctx.ticker, company_name=ctx.company_name,
                 financials=ctx.state.get("_financials", []),
             )
+        if agent_name == "price_data":
+            from agents.data.price_agent import run_price_agent
+            return await run_price_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                prices=ctx.state.get("_prices", []),
+            )
 
-        # Other agents: stub for now
+        # Phase 2: Analysis agents
+        if agent_name == "valuation":
+            from agents.analysis.valuation_agent import run_valuation_agent
+            return await run_valuation_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                financials=ctx.state.get("_financials", []),
+                prices=ctx.state.get("_prices", []),
+            )
+
         return {"note": f"Agent '{agent_name}' not yet implemented (stub)"}
 
 

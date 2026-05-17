@@ -76,12 +76,17 @@ async def _run_generation(task_id, req, orchestrator, route_result, resolved_tic
             config=config,
         )
 
-        # Pre-fetch financial data if AkShare provider is available
+        # Pre-fetch data if AkShare provider is available
         try:
             from datetime import date as dt_date
             from providers.akshare_provider import AkShareProvider
             ak = AkShareProvider()
             if await ak.health_check():
+                end = dt_date.today()
+                start = end.replace(year=end.year - 3)
+                prices = await ak.get_prices(resolved_ticker, start, end)
+                ctx.state["_prices"] = prices
+                logger.info(f"Pre-fetched {len(prices)} price records for {resolved_ticker}")
                 financials = await ak.get_financials(resolved_ticker)
                 ctx.state["_financials"] = financials
                 logger.info(f"Pre-fetched {len(financials)} financial records for {resolved_ticker}")
