@@ -10,21 +10,21 @@
   "llm_providers": {
     "provider_deep": {
       "provider": "deepseek",
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-pro",
       "temperature": 0.3,
       "max_tokens": 16000,
       "api_key_source": "env:DEEPSEEK_API_KEY",
       "timeout_seconds": 180,
-      "note": "DeepSeek-R1 — 最强推理，用于深度分析、辩论、报告撰写"
+      "note": "DeepSeek V4 Pro — 深度分析、辩论、报告撰写"
     },
     "provider_quick": {
       "provider": "deepseek",
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-pro",
       "temperature": 0.3,
       "max_tokens": 8000,
       "api_key_source": "env:DEEPSEEK_API_KEY",
       "timeout_seconds": 60,
-      "note": "DeepSeek-V3 — 快速任务：数据聚合、摘要、图表"
+      "note": "DeepSeek V4 Pro — 数据聚合、摘要、图表"
     }
   },
   "pipelines": {

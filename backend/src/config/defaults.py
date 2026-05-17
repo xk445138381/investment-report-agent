@@ -8,7 +8,7 @@ from copy import deepcopy
 DEFAULT_LLM_PROVIDERS = {
     "provider_deep": {
         "provider": "deepseek",
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-pro",
         "temperature": 0.3,
         "max_tokens": 16000,
         "api_key_source": "env:DEEPSEEK_API_KEY",
@@ -16,7 +16,7 @@ DEFAULT_LLM_PROVIDERS = {
     },
     "provider_quick": {
         "provider": "deepseek",
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-pro",
         "temperature": 0.3,
         "max_tokens": 8000,
         "api_key_source": "env:DEEPSEEK_API_KEY",
