@@ -7,19 +7,19 @@ from copy import deepcopy
 
 DEFAULT_LLM_PROVIDERS = {
     "provider_deep": {
-        "provider": "anthropic",
-        "model": "claude-sonnet-4-6",
+        "provider": "deepseek",
+        "model": "deepseek-reasoner",
         "temperature": 0.3,
         "max_tokens": 16000,
-        "api_key_source": "env:ANTHROPIC_API_KEY",
-        "timeout_seconds": 120,
+        "api_key_source": "env:DEEPSEEK_API_KEY",
+        "timeout_seconds": 180,
     },
     "provider_quick": {
-        "provider": "anthropic",
-        "model": "claude-haiku-4-5-20251001",
+        "provider": "deepseek",
+        "model": "deepseek-chat",
         "temperature": 0.3,
         "max_tokens": 8000,
-        "api_key_source": "env:ANTHROPIC_API_KEY",
+        "api_key_source": "env:DEEPSEEK_API_KEY",
         "timeout_seconds": 60,
     },
 }

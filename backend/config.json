@@ -9,20 +9,22 @@
   },
   "llm_providers": {
     "provider_deep": {
-      "provider": "anthropic",
-      "model": "claude-sonnet-4-6",
+      "provider": "deepseek",
+      "model": "deepseek-reasoner",
       "temperature": 0.3,
       "max_tokens": 16000,
-      "api_key_source": "env:ANTHROPIC_API_KEY",
-      "timeout_seconds": 120
+      "api_key_source": "env:DEEPSEEK_API_KEY",
+      "timeout_seconds": 180,
+      "note": "DeepSeek-R1 — 最强推理，用于深度分析、辩论、报告撰写"
     },
     "provider_quick": {
-      "provider": "anthropic",
-      "model": "claude-haiku-4-5-20251001",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
       "temperature": 0.3,
       "max_tokens": 8000,
-      "api_key_source": "env:ANTHROPIC_API_KEY",
-      "timeout_seconds": 60
+      "api_key_source": "env:DEEPSEEK_API_KEY",
+      "timeout_seconds": 60,
+      "note": "DeepSeek-V3 — 快速任务：数据聚合、摘要、图表"
     }
   },
   "pipelines": {
