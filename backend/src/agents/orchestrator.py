@@ -182,6 +182,32 @@ class Orchestrator:
                 prices=ctx.state.get("_prices", []),
             )
 
+        # Phase 3: Debate agents
+        if agent_name == "bull_case":
+            from agents.debate.bull_agent import run_bull_agent
+            return await run_bull_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                financial_analysis=ctx.state.get("financial_analysis", {}),
+                valuation=ctx.state.get("valuation", {}),
+                price_data=ctx.state.get("price_data", {}),
+            )
+        if agent_name == "bear_case":
+            from agents.debate.bear_agent import run_bear_agent
+            return await run_bear_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                financial_analysis=ctx.state.get("financial_analysis", {}),
+                valuation=ctx.state.get("valuation", {}),
+                price_data=ctx.state.get("price_data", {}),
+            )
+        if agent_name == "risk_judge":
+            from agents.debate.judge_agent import run_judge_agent
+            return await run_judge_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                bull_result=ctx.state.get("bull_case", {}),
+                bear_result=ctx.state.get("bear_case", {}),
+                valuation=ctx.state.get("valuation", {}),
+            )
+
         return {"note": f"Agent '{agent_name}' not yet implemented (stub)"}
 
 
