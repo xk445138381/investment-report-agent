@@ -140,10 +140,7 @@ class Orchestrator:
                 await self._run_agent(ctx, name, phase)
 
     async def _run_agent(self, ctx: AgentContext, agent_name: str, phase: str):
-        """Execute a single agent. In MVP, this is a stub that logs.
-
-        Actual LLM invocation will be wired in when agent modules are built.
-        """
+        """Execute an agent — dispatches to real implementations or logs stub."""
         agent_cfg = self.config.agents.get(agent_name)
         if not agent_cfg:
             ctx.errors.append({"agent": agent_name, "error": "unknown agent"})
@@ -151,15 +148,26 @@ class Orchestrator:
 
         logger.info(f"[{ctx.task_id}] Running agent: {agent_name} (phase={phase})")
         pct = ctx.state.get("_internal_pct", 0)
-        await ctx.set_progress(phase, min(pct, 100),
-                               f"执行 {agent_name}")
+        await ctx.set_progress(phase, min(pct, 100), f"执行 {agent_name}")
 
-        # Placeholder: in real implementation, this calls the agent's
-        # LLM-backed function and stores results in ctx.state.
-        ctx.state[agent_name] = {"status": "completed", "phase": phase}
+        # ── Dispatch to real agent implementations ──
+        result = await self._dispatch_agent(ctx, agent_name)
+        ctx.state[agent_name] = {"status": "completed", "phase": phase, "result": result}
 
-        # Update internal progress (capped at 100)
-        ctx.state["_internal_pct"] = ctx.state.get("_internal_pct", 0) + 10
+        ctx.state["_internal_pct"] = min(ctx.state.get("_internal_pct", 0) + 10, 100)
+
+    async def _dispatch_agent(self, ctx: AgentContext, agent_name: str) -> dict:
+        """Route to concrete agent implementation if available."""
+        # Phase 1: Data agents
+        if agent_name == "financial_data":
+            from agents.data.financial_agent import run_financial_agent
+            return await run_financial_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                financials=ctx.state.get("_financials", []),
+            )
+
+        # Other agents: stub for now
+        return {"note": f"Agent '{agent_name}' not yet implemented (stub)"}
 
 
 # ── Top-level entry point ──

@@ -76,6 +76,18 @@ async def _run_generation(task_id, req, orchestrator, route_result, resolved_tic
             config=config,
         )
 
+        # Pre-fetch financial data if AkShare provider is available
+        try:
+            from datetime import date as dt_date
+            from providers.akshare_provider import AkShareProvider
+            ak = AkShareProvider()
+            if await ak.health_check():
+                financials = await ak.get_financials(resolved_ticker)
+                ctx.state["_financials"] = financials
+                logger.info(f"Pre-fetched {len(financials)} financial records for {resolved_ticker}")
+        except Exception:
+            logger.warning("AkShare not available, proceeding without pre-fetched data")
+
         async def progress_cb(phase, pct, msg):
             _tasks[task_id]["current_phase"] = phase
             _tasks[task_id]["progress_pct"] = pct
