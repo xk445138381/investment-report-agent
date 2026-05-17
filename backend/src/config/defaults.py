@@ -8,7 +8,7 @@ from copy import deepcopy
 DEFAULT_LLM_PROVIDERS = {
     "provider_deep": {
         "provider": "anthropic",
-        "model": "claude-opus-4-7",
+        "model": "claude-sonnet-4-6",
         "temperature": 0.3,
         "max_tokens": 16000,
         "api_key_source": "env:ANTHROPIC_API_KEY",

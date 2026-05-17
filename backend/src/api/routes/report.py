@@ -39,23 +39,28 @@ async def generate_report(req: GenerateRequest):
     """Start a report generation task."""
     orchestrator = Orchestrator(get_config())
     route_result = await orchestrator.route(req.ticker, {})
+    if route_result.get("error"):
+        raise HTTPException(400, route_result["error"])
 
     task_id = str(uuid4())
+    resolved_ticker = route_result.get("ticker") or req.ticker
+    resolved_type = route_result.get("pipeline_type") or req.report_type
+
     _tasks[task_id] = {
         "status": "queued",
-        "ticker": req.ticker,
-        "report_type": req.report_type,
+        "ticker": resolved_ticker,
+        "report_type": resolved_type,
         "created_at": datetime.now(),
         "result": None,
     }
 
     # Start background task
-    asyncio.create_task(_run_generation(task_id, req, orchestrator, route_result))
+    asyncio.create_task(_run_generation(task_id, req, orchestrator, route_result, resolved_ticker, resolved_type))
 
     return {"task_id": task_id, "status": "queued"}
 
 
-async def _run_generation(task_id, req, orchestrator, route_result):
+async def _run_generation(task_id, req, orchestrator, route_result, resolved_ticker, resolved_type):
     """Background task that executes the pipeline."""
     try:
         _tasks[task_id]["status"] = "running"
@@ -64,9 +69,9 @@ async def _run_generation(task_id, req, orchestrator, route_result):
         config = get_config()
         ctx = AgentContext(
             task_id=task_id,
-            ticker=req.ticker,
-            company_name=route_result.get("company_name") or req.ticker,
-            report_type=req.report_type,
+            ticker=resolved_ticker,
+            company_name=route_result.get("company_name") or resolved_ticker,
+            report_type=resolved_type,
             template_id=req.template_id,
             config=config,
         )

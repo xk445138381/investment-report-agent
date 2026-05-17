@@ -103,7 +103,7 @@ BASE_HTML_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_jinja_env = Environment(loader=BaseLoader(), autoescape=select_autoescape())
+_jinja_env = Environment(loader=BaseLoader(), autoescape=select_autoescape(default=True, default_for_string=True))
 
 
 def validate_template(template: dict) -> None:

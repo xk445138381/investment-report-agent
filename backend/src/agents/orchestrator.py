@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 class AgentContext:
     """Shared context passed through the agent pipeline."""
-    def __init__(self, task_id: Optional[UUID], ticker: str, company_name: str,
+    def __init__(self, task_id: str, ticker: str, company_name: str,
                  report_type: str, template_id: str, config: Config):
-        self.task_id = task_id or uuid4()
+        self.task_id = task_id
         self.ticker = ticker
         self.company_name = company_name
         self.report_type = report_type
@@ -36,11 +36,11 @@ class AgentContext:
         self.progress_callback: Optional[Callable[[str, int, str], Awaitable[None]]] = None
         self.created_at = datetime.now()
 
-    def set_progress(self, phase: str, pct: int, message: str):
-        """Record progress; if callback is set, invoke it asynchronously."""
+    async def set_progress(self, phase: str, pct: int, message: str):
+        """Record progress; if callback is set, await it."""
         logger.info(f"[{self.task_id}] {phase} ({pct}%): {message}")
         if self.progress_callback:
-            asyncio.ensure_future(self.progress_callback(phase, pct, message))
+            await self.progress_callback(phase, pct, message)
 
 
 class Orchestrator:
@@ -69,23 +69,24 @@ class Orchestrator:
             "error": None,
         }
 
-        # Detect report type from message
-        if any(w in user_message for w in ["简报", "快报", "速览", "brief", "看下", "快速"]):
-            result["pipeline_type"] = "brief"
-        elif any(w in user_message for w in ["宏观", "周报"]):
+        # Detect report type from message (check "宏观/周报/IPO" before "简报/快速")
+        if any(w in user_message for w in ["宏观", "周报"]):
             result["pipeline_type"] = "macro_weekly"
         elif any(w in user_message for w in ["ipo", "新股", "上市"]):
             result["pipeline_type"] = "ipo"
+        elif any(w in user_message for w in ["简报", "快报", "速览", "brief", "快速"]):
+            result["pipeline_type"] = "brief"
 
-        # Extract ticker pattern: 600519.SH, AAPL, 0700.HK, etc.
+        # Extract ticker pattern: 600519.SH, 000858.SZ, 0700.HK
         ticker_match = re.search(r'(\d{6}\.(?:SH|SZ|HK))', user_message)
         if ticker_match:
             result["ticker"] = ticker_match.group(1)
             result["company_name"] = ticker_match.group(1)
         else:
-            # Try US ticker
-            us_match = re.search(r'\b([A-Z]{1,5})\b', user_message)
-            if us_match and us_match.group(1) not in ("HK", "SH", "SZ", "IPO"):
+            # Try US ticker — only match standalone uppercase 2-5 letters
+            # preceded by a non-alphanumeric or start, not followed by CJK chars
+            us_match = re.search(r'(?<![一-鿿\w])([A-Z]{1,5})(?![一-鿿\w])', user_message)
+            if us_match and us_match.group(1) not in ("HK", "SH", "SZ", "IPO", "A", "I", "AI"):
                 result["ticker"] = us_match.group(1)
                 result["company_name"] = us_match.group(1)
 
@@ -115,7 +116,7 @@ class Orchestrator:
 
         total_phases = len(pipeline.phases)
         for i, (phase_name, phase_cfg) in enumerate(pipeline.phases.items()):
-            ctx.set_progress(phase_name, int((i / total_phases) * 100),
+            await ctx.set_progress(phase_name, int((i / total_phases) * 100),
                              f"开始 {phase_name}")
 
             if phase_cfg.parallel:
@@ -123,7 +124,7 @@ class Orchestrator:
             else:
                 await self._run_serial(ctx, phase_name, phase_cfg, phase_cfg.agents)
 
-        ctx.set_progress("complete", 100, "报告生成完成")
+        await ctx.set_progress("complete", 100, "报告生成完成")
         return ctx.state
 
     async def _run_parallel(self, ctx: AgentContext, phase: str, agent_names: list[str]):
@@ -132,9 +133,11 @@ class Orchestrator:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _run_serial(self, ctx: AgentContext, phase: str, phase_cfg, agent_names: list[str]):
-        """Execute agents serially (used for debate phases)."""
-        for name in agent_names:
-            await self._run_agent(ctx, name, phase)
+        """Execute agents serially, respecting debate_rounds for debate phases."""
+        rounds = max(1, getattr(phase_cfg, 'debate_rounds', 1) or 1)
+        for _ in range(rounds):
+            for name in agent_names:
+                await self._run_agent(ctx, name, phase)
 
     async def _run_agent(self, ctx: AgentContext, agent_name: str, phase: str):
         """Execute a single agent. In MVP, this is a stub that logs.
@@ -147,14 +150,15 @@ class Orchestrator:
             return
 
         logger.info(f"[{ctx.task_id}] Running agent: {agent_name} (phase={phase})")
-        ctx.set_progress(phase, ctx.state.get("_internal_pct", 50),
-                         f"执行 {agent_name}")
+        pct = ctx.state.get("_internal_pct", 0)
+        await ctx.set_progress(phase, min(pct, 100),
+                               f"执行 {agent_name}")
 
         # Placeholder: in real implementation, this calls the agent's
         # LLM-backed function and stores results in ctx.state.
         ctx.state[agent_name] = {"status": "completed", "phase": phase}
 
-        # Update internal progress
+        # Update internal progress (capped at 100)
         ctx.state["_internal_pct"] = ctx.state.get("_internal_pct", 0) + 10
 
 

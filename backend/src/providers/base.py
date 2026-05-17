@@ -7,7 +7,9 @@ from datetime import date
 class DataProvider(ABC):
     """All data providers must implement this interface."""
 
-    provider_name: str
+    @property
+    def provider_name(self) -> str:
+        raise NotImplementedError("Subclasses must define provider_name")
 
     @abstractmethod
     async def health_check(self) -> bool:

@@ -69,6 +69,13 @@ def calculate_dcf_three_stage(
         return {"per_share_value": None, "error": "negative_last_fcf",
                 "reason": f"Last FCF ({last_fcf}) is not positive"}
 
+    # Compute WACC from components if not explicitly provided
+    if wacc == 0.0:
+        rf, erp = _select_rf_erp(market, params)
+        cost_of_equity = rf + beta * erp
+        cost_of_debt = (interest_expense / total_debt) if total_debt and total_debt > 0 else (rf + 0.02)
+        wacc = (equity_weight * cost_of_equity) + (debt_weight * cost_of_debt * (1 - tax_rate))
+
     if wacc <= params.terminal_growth:
         return {"per_share_value": None, "error": "wacc_le_growth",
                 "reason": f"WACC ({wacc:.4f}) <= terminal growth ({params.terminal_growth:.4f})"}
@@ -102,7 +109,9 @@ def calculate_dcf_three_stage(
 
     pv_terminal = terminal_value / (1 + wacc) ** (params.stage1_years + params.stage2_years)
     enterprise_value = pv_sum + pv_terminal
-    equity_value = enterprise_value - net_debt + cash - minority_interest
+    # net_debt = total_debt - cash, so equity = EV - total_debt + cash - minority
+    # which equals EV - net_debt - minority (net_debt already nets out cash)
+    equity_value = enterprise_value - net_debt - minority_interest
 
     if shares_outstanding <= 0:
         return {"per_share_value": None, "error": "zero_shares"}
@@ -192,7 +201,9 @@ def calculate_ev_ebitda(
 
     adjusted_multiple = industry_ev_ebitda * premium
     enterprise_value = ebitda * adjusted_multiple
-    equity_value = enterprise_value - net_debt + minority_interest + preferred_stock - non_controlling
+    # equity = EV - total_debt + cash - minority - preferred
+    # with net_debt = total_debt - cash: equity = EV - net_debt - minority - preferred
+    equity_value = enterprise_value - net_debt - minority_interest - preferred_stock
 
     return {
         "per_share_value": round(equity_value / shares_outstanding, 2) if shares_outstanding > 0 else None,
