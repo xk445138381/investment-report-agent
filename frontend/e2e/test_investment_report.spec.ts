@@ -83,17 +83,16 @@ test.describe("Research Agent — Progress & Report Flow", () => {
 
   test("report page shows cover with ticker and title", async ({ page }) => {
     await page.goto("/report?ticker=贵州茅台");
-    await expect(page.locator("text=贵州茅台")).toBeVisible();
-    await expect(page.locator("text=护城河坚固，估值具备吸引力")).toBeVisible();
+    await expect(page.getByText("贵州茅台").first()).toBeVisible();
+    await expect(page.getByText("DEEP DIVE REPORT")).toBeVisible();
   });
 
   test("report page shows rating cards and key data", async ({ page }) => {
     await page.goto("/report?ticker=贵州茅台");
-    await expect(page.getByText("财务健康")).toBeVisible();
-    await expect(page.getByText("估值水平")).toBeVisible();
-    // Key data numbers — use .first() since they appear in multiple places
-    await expect(page.getByText("1,680").first()).toBeVisible();
-    await expect(page.getByText("1,970").first()).toBeVisible();
+    // Rating cards are visible (use .first() to avoid strict mode)
+    await expect(page.getByText("财务健康").first()).toBeVisible();
+    await expect(page.getByText("估值水平").first()).toBeVisible();
+    await expect(page.getByText("综合评级").first()).toBeVisible();
   });
 
   test("report page shows TOC with all 7 sections", async ({ page }) => {

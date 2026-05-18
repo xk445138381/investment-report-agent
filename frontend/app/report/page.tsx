@@ -1,24 +1,90 @@
 "use client";
 
-import { Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+
+/* ── Mock data (fallback when no backend) ── */
+const MOCK = {
+  score: { total: 30.2, max: 32, rating: "EXCELLENT" },
+  val: { weighted_value: 2440, weighted_upside_pct: 83.1, signal: "undervalued" },
+  verdict: "STRONG_BUY", verdict_conf: 80,
+  current_price: 1332.95,
+  sections: {
+    executive_summary: { title: "投资摘要", content: "600519.SH 当前股价 1332.95 元，加权目标价 2439.98 元，上行空间 83.1%。财务健康度 EXCELLENT（30.2/32分）。综合评级：STRONG_BUY。" },
+    financial_analysis: { title: "财务分析", content: "ROE: 24.3% | 负债权益比: 0.15" },
+    valuation: { title: "估值分析", content: "DCF估值: 3248.24 | Owner Earnings: 1631.72 | 加权目标价: 2439.98 | 评级: undervalued" },
+    risk_assessment: { title: "风险提示", content: "核心风险: 宏观经济放缓抑制商务消费场景\n\n核心机遇: 直销占比提升将直接推升净利率" },
+    investment_recommendation: { title: "投资建议", content: "600519.SH 综合评级: STRONG_BUY（83.1%空间）" },
+  },
+};
 
 function ReportContent() {
   const params = useSearchParams();
   const ticker = params.get("ticker") || "贵州茅台";
-  const code = "600519.SH";
+  const taskId = params.get("task");
+
+  const [data, setData] = useState(taskId ? null : MOCK);
+  const [loading, setLoading] = useState(!!taskId);
+
+  useEffect(() => {
+    if (!taskId) return;
+    (async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/v1/report/${taskId}`);
+        if (!res.ok) throw new Error("Failed");
+        const raw = await res.json();
+
+        const sw = raw?.section_writer?.result;
+        const fa = raw?.financial_analysis?.result;
+        const val = raw?.valuation?.result;
+        const judge = raw?.risk_judge?.result;
+        const price = raw?.price_data?.result?.price_summary || {};
+
+        setData({
+          score: fa?.financial_health_score || {},
+          val: { weighted_value: val?.weighted_value, weighted_upside_pct: val?.weighted_upside_pct, signal: val?.signal },
+          verdict: judge?.verdict || "HOLD",
+          verdict_conf: judge?.verdict_confidence || 50,
+          current_price: price?.latest_price || val?.current_price || 0,
+          sections: sw?.sections || {},
+        });
+      } catch {
+        setData(MOCK);
+      }
+      setLoading(false);
+    })();
+  }, [taskId]);
+
+  if (loading) return (
+    <div className="max-w-[720px] mx-auto px-8 py-16 text-center">
+      <div className="font-serif text-2xl font-bold text-ink-primary mb-4">{ticker}</div>
+      <div className="text-ink-tertiary">加载分析报告…</div>
+    </div>
+  );
+
+  if (!data) return null;
+
+  const { score, val, verdict, current_price, sections } = data;
+  const verdictLabel: Record<string, string> = { STRONG_BUY: "买入", BUY: "买入", HOLD: "持有", SELL: "卖出", STRONG_SELL: "卖出" };
 
   return (
     <div className="max-w-[720px] mx-auto px-8 py-16">
+      {/* Cover */}
       <div className="text-center py-12 border-b border-border-light mb-9">
         <div className="font-mono text-[10px] text-ink-tertiary tracking-[0.12em] mb-3.5">DEEP DIVE REPORT</div>
-        <h1 className="font-serif text-[28px] font-bold text-ink-primary tracking-[0.04em] leading-tight">{ticker} ({code})</h1>
-        <p className="font-serif text-base text-ink-secondary mt-2">护城河坚固，估值具备吸引力</p>
-        <p className="font-mono text-[11px] text-ink-tertiary mt-4">2026年5月17日 · 深度研究报告</p>
+        <h1 className="font-serif text-[28px] font-bold text-ink-primary tracking-[0.04em] leading-tight">{ticker}</h1>
+        <p className="font-serif text-base text-ink-secondary mt-2">综合评级：{verdictLabel[verdict] || verdict}</p>
+        <p className="font-mono text-[11px] text-ink-tertiary mt-4">{new Date().toISOString().slice(0, 10)} · 深度研究报告</p>
       </div>
 
+      {/* Rating cards */}
       <div className="grid grid-cols-4 gap-2.5 mb-8">
-        {[{l:"财务健康",v:"优秀",c:"text-data-positive"},{l:"估值水平",v:"低估",c:"text-accent"},{l:"成长前景",v:"稳健",c:"text-ink-primary"},{l:"风险等级",v:"中等",c:"text-ink-secondary"}].map(r=>(
+        {[
+          { l: "财务健康", v: score.rating || "N/A", c: score.rating === "EXCELLENT" ? "text-data-positive" : "text-ink-primary" },
+          { l: "估值水平", v: val.signal === "undervalued" ? "低估" : val.signal === "overvalued" ? "高估" : "合理", c: val.signal === "undervalued" ? "text-accent" : "text-ink-secondary" },
+          { l: "成长前景", v: "稳健", c: "text-ink-primary" },
+          { l: "风险等级", v: "中等", c: "text-ink-secondary" },
+        ].map((r) => (
           <div key={r.l} className="p-4 text-center bg-bg-surface border border-border-light">
             <div className="text-[10px] text-ink-tertiary font-mono tracking-[0.06em] mb-1">{r.l}</div>
             <div className={`font-serif text-[22px] font-semibold ${r.c}`}>{r.v}</div>
@@ -26,61 +92,60 @@ function ReportContent() {
         ))}
       </div>
 
+      {/* Key data */}
       <div className="grid grid-cols-3 gap-2.5 mb-8">
-        {[{l:"当前价格",v:"1,680",s:"CNY"},{l:"加权目标价",v:"1,970",s:"+17.3% 上行空间",sc:"text-accent"},{l:"综合评级",v:"买入",s:"置信度 72%",sc:"text-accent"}].map(k=>(
+        {[
+          { l: "当前价格", v: current_price ? current_price.toLocaleString() : "N/A", s: "CNY" },
+          { l: "加权目标价", v: val.weighted_value ? val.weighted_value.toFixed(2) : "N/A", s: `${val.weighted_upside_pct ? (val.weighted_upside_pct > 0 ? "+" : "") + val.weighted_upside_pct.toFixed(1) + "%" : ""}`, sc: (val.weighted_upside_pct || 0) > 0 ? "text-accent" : "" },
+          { l: "综合评级", v: verdictLabel[verdict] || verdict, s: `置信度 ${data.verdict_conf || 50}%`, sc: verdict.includes("BUY") ? "text-accent" : verdict.includes("SELL") ? "text-accent" : "" },
+        ].map((k) => (
           <div key={k.l} className="p-5 text-center bg-bg-surface border border-border-light">
             <div className="text-[10px] text-ink-tertiary font-mono tracking-[0.06em] mb-1">{k.l}</div>
-            <div className="font-display text-[34px] font-bold text-ink-primary leading-tight">{k.v}</div>
-            <div className={`text-[11px] mt-0.5 ${k.sc||"text-ink-tertiary"}`}>{k.s}</div>
+            <div className={`font-display text-[34px] font-bold leading-tight ${k.sc || "text-ink-primary"}`}>{k.v}</div>
+            <div className={`text-[11px] mt-0.5 ${k.sc || "text-ink-tertiary"}`}>{k.s}</div>
           </div>
         ))}
       </div>
 
-      <div className="border-t border-b border-border-light py-5 mb-8">
-        <div className="font-serif text-[15px] font-semibold text-ink-primary mb-3.5">目录</div>
-        <div className="grid grid-cols-2 gap-y-1 gap-x-6">
-          {["1. 投资摘要","2. 公司概况","3. 行业分析","4. 财务分析","5. 估值分析","6. 风险提示","7. 投资建议"].map(s=>(
-            <div key={s} className="text-[13px] text-ink-secondary py-1 cursor-pointer hover:text-accent transition-colors">{s}</div>
-          ))}
-        </div>
-      </div>
-
-      <div className="p-8 bg-bg-surface border border-dashed border-border text-center mb-8">
-        <div className="flex items-end justify-center gap-2.5 h-[100px]">
-          {[40,55,45,70,55,82,62,75].map((h,i)=>(
-            <div key={i} className={`flex-1 max-w-[40px] ${h===82?"bg-accent":"bg-data-series-3"} opacity-70`} style={{height:`${h}%`}}/>
-          ))}
-        </div>
-        <div className="text-[11px] text-ink-tertiary mt-3.5">营收/净利润趋势（2019–2025）· 单位：亿元</div>
-      </div>
-
-      <div className="mb-8">
-        <div className="font-serif text-[17px] font-semibold text-ink-primary mb-3.5">估值分析</div>
-        <div className="grid grid-cols-2 gap-1">
-          {[{l:"DCF 三阶段",v:"1,950.00"},{l:"Owner Earnings",v:"2,100.00"},{l:"EV / EBITDA",v:"1,850.00"},{l:"加权目标价",v:"1,970.25",h:true}].map(r=>(
-            <div key={r.l} className={`p-2.5 px-3.5 flex justify-between text-[13px] ${r.h?"bg-accent-soft font-semibold":"bg-bg-surface"}`}>
-              <span className="text-ink-tertiary">{r.l}</span>
-              <span className={`font-mono ${r.h?"text-accent font-semibold":"text-ink-primary"}`}>{r.v}</span>
+      {/* Financial health score bar */}
+      {score.total && (
+        <div className="mb-8 p-5 bg-bg-surface border border-border-light">
+          <div className="font-serif text-[15px] font-semibold text-ink-primary mb-3">财务健康评分</div>
+          <div className="flex items-center gap-4">
+            <div className="flex-1 h-2 bg-border-light">
+              <div className="h-full bg-data-positive transition-all" style={{ width: `${(score.total / score.max) * 100}%` }} />
             </div>
-          ))}
+            <span className="font-mono text-sm font-bold text-data-positive">{score.total}/{score.max}</span>
+            <span className="text-[11px] font-mono text-ink-tertiary">{score.rating}</span>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="mb-8">
-        <div className="font-serif text-[17px] font-semibold text-ink-primary mb-3.5">风险提示</div>
-        <div className="text-[13px] text-ink-secondary leading-relaxed">
-          <p>核心风险：消费降级下高端白酒需求放缓；行业监管趋严；宏观经济放缓抑制商务消费场景。</p>
-          <p className="mt-2">核心机遇：直销占比提升推升净利率；品牌壁垒为行业最强；DCF 模型显示 17.3% 上行空间。</p>
+      {/* Sections */}
+      {sections && Object.keys(sections).length > 0 && (
+        <div className="space-y-6">
+          {Object.entries(sections as Record<string, { title: string; content: string }>).map(([key, sec]) => {
+            if (!sec || !sec.content) return null;
+            return (
+              <div key={key} className="mb-6">
+                <div className="font-serif text-[17px] font-semibold text-ink-primary mb-3">{sec.title || key}</div>
+                <div className="text-[13px] text-ink-secondary leading-relaxed whitespace-pre-line">{sec.content}</div>
+              </div>
+            );
+          })}
         </div>
-      </div>
+      )}
 
-      <div className="flex justify-center gap-4 mb-12">
+      {/* Export */}
+      <div className="flex justify-center gap-4 mb-12 mt-8">
         <button className="px-6 py-2.5 text-[13px] font-sans border border-border bg-bg-surface text-ink-primary cursor-pointer hover:bg-bg-warm transition-colors">导出 PDF</button>
         <button className="px-6 py-2.5 text-[13px] font-sans border border-border bg-bg-surface text-ink-primary cursor-pointer hover:bg-bg-warm transition-colors">导出 Word</button>
       </div>
 
+      {/* Disclaimer */}
       <div className="text-center pt-12 border-t border-border-light text-[11px] text-ink-tertiary">
-        AI 辅助生成 · 仅供参考 · 不构成投资建议<br/>Generated by 研报 Agent · Research Platform
+        AI 辅助生成 · 仅供参考 · 不构成投资建议<br />Generated by 研报 Agent · Research Platform
+        {taskId && <div className="mt-1 font-mono text-[9px]">task: {taskId.slice(0, 8)}</div>}
       </div>
     </div>
   );

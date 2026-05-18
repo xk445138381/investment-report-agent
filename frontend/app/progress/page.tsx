@@ -28,7 +28,11 @@ function ProgressContent() {
   const [mode, setMode] = useState<"connecting" | "real" | "mock">("connecting");
   const started = useRef(false);
 
-  const goReport = () => router.push(`/report?ticker=${encodeURIComponent(ticker)}`);
+  const goReport = (tid?: string) => {
+    const params = new URLSearchParams({ ticker });
+    if (tid) params.set("task", tid);
+    router.push(`/report?${params.toString()}`);
+  };
 
   useEffect(() => {
     if (started.current) return;
@@ -51,7 +55,7 @@ function ProgressContent() {
           } else if (event === "complete") {
             setPhase(4);
             setLogs((prev) => [...prev, "✓ 报告生成完成"]);
-            setTimeout(goReport, 800);
+            setTimeout(() => goReport(res.task_id), 800);
           } else if (event === "error") {
             setLogs((prev) => [...prev, `✗ ${data}`]);
           }
@@ -75,7 +79,7 @@ function ProgressContent() {
       timers.push(setTimeout(() => {
         setPhase(s.p);
         if (s.p === 3) setShowDebate(true);
-        if (s.p === 4) setTimeout(goReport, 500);
+        if (s.p === 4) setTimeout(() => goReport(), 500);
       }, s.d));
     });
     return () => timers.forEach(clearTimeout);
