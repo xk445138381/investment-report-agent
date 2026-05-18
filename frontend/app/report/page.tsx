@@ -3,8 +3,14 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
+type Section = { title: string; content: string };
+type NewsItem = { title: string; summary: string; date: string; source: string };
+
 /* ── Mock data (fallback when no backend) ── */
-const MOCK = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Data = any;
+
+const MOCK: Data = {
   score: { total: 30.2, max: 32, rating: "EXCELLENT" },
   val: { weighted_value: 2440, weighted_upside_pct: 83.1, signal: "undervalued" },
   verdict: "STRONG_BUY", verdict_conf: 80,
@@ -18,12 +24,19 @@ const MOCK = {
   },
 };
 
+const MOCK_NEWS: NewsItem[] = [
+  { title: '国海证券：贵州茅台提价，维持买入评级', summary: '茅台提价传递市场化之声，Q2经营弹性可期。', date: '2026-05-18', source: '腾讯云' },
+  { title: '多款茅台酒将首次上线i茅台', summary: '此前刚上调部分茅台酒产品价格，最高每瓶涨200元。', date: '2026-05-18', source: '新浪' },
+  { title: '茅台调整i茅台和门店购酒时间', summary: '或瞄准即时零售机遇，推进直销渠道建设。', date: '2026-05-18', source: '腾讯云' },
+];
+
 function ReportContent() {
   const params = useSearchParams();
   const ticker = params.get("ticker") || "贵州茅台";
   const taskId = params.get("task");
 
   const [data, setData] = useState(taskId ? null : MOCK);
+  const [newsItems, setNewsItems] = useState<NewsItem[]>(taskId ? [] : MOCK_NEWS);
   const [loading, setLoading] = useState(!!taskId);
 
   useEffect(() => {
@@ -39,6 +52,7 @@ function ReportContent() {
         const val = raw?.valuation?.result;
         const judge = raw?.risk_judge?.result;
         const price = raw?.price_data?.result?.price_summary || {};
+        const newsRaw = raw?.news_data?.result?.recent_events || [];
 
         setData({
           score: fa?.financial_health_score || {},
@@ -48,8 +62,15 @@ function ReportContent() {
           current_price: price?.latest_price || val?.current_price || 0,
           sections: sw?.sections || {},
         });
+        setNewsItems(newsRaw.map((e: Record<string, unknown>) => ({
+          title: String(e.title || ""),
+          summary: String(e.summary || ""),
+          date: String(e.date || ""),
+          source: String(e.source || ""),
+        })));
       } catch {
         setData(MOCK);
+        setNewsItems(MOCK_NEWS);
       }
       setLoading(false);
     })();
@@ -65,6 +86,7 @@ function ReportContent() {
   if (!data) return null;
 
   const { score, val, verdict, current_price, sections } = data;
+  const showNews = newsItems.length > 0;
   const verdictLabel: Record<string, string> = { STRONG_BUY: "买入", BUY: "买入", HOLD: "持有", SELL: "卖出", STRONG_SELL: "卖出" };
 
   return (
@@ -133,6 +155,39 @@ function ReportContent() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Chart (if price data available) */}
+      {current_price > 0 && (
+        <div className="mb-8 p-8 bg-bg-surface border border-dashed border-border text-center">
+          <div className="flex items-end justify-center gap-2 h-[100px]">
+            {[40,55,45,70,55,82,62,75].map((h, i) => (
+              <div key={i} className={`flex-1 max-w-[40px] ${h === 82 ? "bg-accent" : "bg-data-series-3"} opacity-70`} style={{ height: `${h}%` }} />
+            ))}
+          </div>
+          <div className="text-[11px] text-ink-tertiary mt-3.5">股价走势（示意 · 图表引擎待接入前端渲染）</div>
+        </div>
+      )}
+
+      {/* News section */}
+      {showNews && newsItems.length > 0 && (
+        <div className="mb-8">
+          <div className="font-serif text-[17px] font-semibold text-ink-primary mb-3">近期动态</div>
+          <div className="space-y-2">
+            {newsItems.slice(0, 5).map((n, i) => (
+              <div key={i} className="p-3 bg-bg-surface border border-border-light">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="text-[13px] text-ink-primary font-medium leading-relaxed">{n.title}</div>
+                    <div className="text-[12px] text-ink-secondary mt-1 leading-relaxed">{n.summary}</div>
+                  </div>
+                  <div className="text-[10px] text-ink-tertiary font-mono whitespace-nowrap">{n.date?.slice(0, 10)}</div>
+                </div>
+                <div className="text-[10px] text-ink-tertiary mt-1 font-mono">{n.source}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
