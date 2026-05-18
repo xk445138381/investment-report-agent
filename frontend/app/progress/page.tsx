@@ -1,18 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense, useCallback } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { generateReport, streamProgress, type TaskStatus } from "@/lib/api";
-
-/* ------------------------------------------------------------------ */
-/*  Mock animation (used when backend is unavailable)                 */
-/* ------------------------------------------------------------------ */
-const PHASE_AGENTS = [
-  "行情数据、财报数据、公告新闻、宏观行业",
-  "财务分析、估值建模、行业竞争、公司治理",
-  "多头论点、空头论点、风险裁判",
-  "章节撰写、图表生成、标题摘要",
-];
+import { generateReport, streamProgress } from "@/lib/api";
 
 const INITIAL_PHASES = [
   { id: "p1", num: "01", name: "数据聚合", agents: ["行情数据","财报数据","公告新闻","宏观行业"] },
@@ -26,104 +16,70 @@ const DEBATE = {
   bear: ["宏观经济放缓抑制商务消费场景","行业监管趋严，消费税改革风险上升","当前 PE 处于近 5 年 72% 分位"],
 };
 
-function useMockProgress(ticker: string, depth: string, onComplete: () => void) {
-  const [phase, setPhase] = useState(0);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [showDebate, setShowDebate] = useState(false);
-  const started = useRef(false);
-
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    setLogs([`▶ 开始分析 ${ticker} (600519.SH) — ${depth === "deep" ? "深度研报" : "快速简报"}`]);
-
-    const schedule = [{ p: 1, d: 600 }, { p: 2, d: 1300 }, { p: 3, d: 2100 }, { p: 4, d: 3000 }];
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    schedule.forEach((s) => {
-      timers.push(setTimeout(() => {
-        setPhase(s.p);
-        setLogs((prev) => [...prev, `✓ Phase ${s.p} 完成 — ${PHASE_AGENTS[s.p - 1]}`]);
-        if (s.p === 3) setShowDebate(true);
-        if (s.p === 4) setTimeout(onComplete, 500);
-      }, s.d));
-    });
-    return () => timers.forEach(clearTimeout);
-  }, []);
-
-  return { phase, logs, showDebate };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Real backend progress hook (via SSE)                              */
-/* ------------------------------------------------------------------ */
-function useRealProgress(taskId: string, ticker: string, onComplete: () => void) {
-  const [phase, setPhase] = useState(0);
-  const [logs, setLogs] = useState<string[]>([`▶ 开始分析 ${ticker} — task: ${taskId.slice(0, 8)}…`]);
-  const [showDebate, setShowDebate] = useState(false);
-
-  useEffect(() => {
-    const abort = streamProgress(taskId, (event, data) => {
-      if (event === "progress") {
-        setLogs((prev) => [...prev, `⏳ ${data}`]);
-        // Parse phase from SSE message like "phase_2_analysis (50%)"
-        const phaseMap: Record<string, number> = {
-          phase_1: 1, phase_2: 2, phase_3: 3, phase_4: 4,
-        };
-        for (const [key, p] of Object.entries(phaseMap)) {
-          if (data.includes(key)) { setPhase(p); break; }
-        }
-        if (data.includes("debate") || data.includes("phase_3")) setShowDebate(true);
-      } else if (event === "complete") {
-        setPhase(4);
-        setLogs((prev) => [...prev, "✓ 报告生成完成"]);
-        setTimeout(onComplete, 800);
-      } else if (event === "error") {
-        setLogs((prev) => [...prev, `✗ ${data}`]);
-      }
-    });
-    return abort;
-  }, [taskId]);
-
-  return { phase, logs, showDebate };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Content (wrapped in Suspense for useSearchParams)                 */
-/* ------------------------------------------------------------------ */
 function ProgressContent() {
   const params = useSearchParams();
   const router = useRouter();
   const ticker = params.get("ticker") || "贵州茅台";
   const depth = params.get("depth") || "deep";
 
+  const [phase, setPhase] = useState(0);
+  const [logs, setLogs] = useState<string[]>([`▶ 开始分析 ${ticker}…`]);
+  const [showDebate, setShowDebate] = useState(false);
   const [mode, setMode] = useState<"connecting" | "real" | "mock">("connecting");
-  const [taskId, setTaskId] = useState<string | null>(null);
   const started = useRef(false);
 
-  const handleComplete = useCallback(() => {
-    router.push(`/report?ticker=${encodeURIComponent(ticker)}`);
-  }, [ticker, router]);
+  const goReport = () => router.push(`/report?ticker=${encodeURIComponent(ticker)}`);
 
-  // Try to connect to real backend first
   useEffect(() => {
     if (started.current) return;
     started.current = true;
 
     (async () => {
+      // Try real backend first
       try {
         const res = await generateReport({ ticker, report_type: depth as "deep_dive" | "brief" });
-        setTaskId(res.task_id);
+        setLogs((prev) => [...prev, `✓ 分析任务启动: ${res.task_id.slice(0, 8)}…`]);
         setMode("real");
+
+        const abort = streamProgress(res.task_id, (event, data) => {
+          if (event === "progress") {
+            setLogs((prev) => [...prev, `⏳ ${data}`]);
+            if (data.includes("phase_2")) setPhase(2);
+            else if (data.includes("phase_3")) { setPhase(3); setShowDebate(true); }
+            else if (data.includes("phase_4")) setPhase(4);
+            else if (data.includes("phase_1")) setPhase(1);
+          } else if (event === "complete") {
+            setPhase(4);
+            setLogs((prev) => [...prev, "✓ 报告生成完成"]);
+            setTimeout(goReport, 800);
+          } else if (event === "error") {
+            setLogs((prev) => [...prev, `✗ ${data}`]);
+          }
+        });
+        return () => abort();
       } catch {
+        // Fall back to mock
+        setLogs((prev) => [...prev, "后端未连接，使用 Demo 模式"]);
         setMode("mock");
       }
     })();
   }, []);
 
-  const mockProgress = useMockProgress(ticker, depth, handleComplete);
-  const realProgress = useRealProgress(taskId || "", ticker, handleComplete);
-
-  const { phase, logs, showDebate } = mode === "real" ? realProgress : mockProgress;
+  // Mock progress (only when API fails)
+  useEffect(() => {
+    if (mode !== "mock") return;
+    setLogs((prev) => [...prev, `▶ Demo: ${ticker} (600519.SH) — ${depth === "deep" ? "深度研报" : "快速简报"}`]);
+    const schedule = [{ p: 1, d: 600 }, { p: 2, d: 1300 }, { p: 3, d: 2100 }, { p: 4, d: 3000 }];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    schedule.forEach((s) => {
+      timers.push(setTimeout(() => {
+        setPhase(s.p);
+        if (s.p === 3) setShowDebate(true);
+        if (s.p === 4) setTimeout(goReport, 500);
+      }, s.d));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [mode]);
 
   return (
     <div className="max-w-[780px] mx-auto px-8 py-12">
@@ -131,9 +87,9 @@ function ProgressContent() {
         <div className="font-display text-[36px] font-bold text-ink-primary leading-tight">{ticker}</div>
         <div className="font-mono text-xs text-ink-tertiary mt-1">
           600519.SH · {depth === "deep" ? "深度研报" : "快速简报"}
-          {mode === "connecting" && <span className="ml-2 text-accent">连接后端…</span>}
-          {mode === "real" && <span className="ml-2 text-data-positive">实时生成</span>}
-          {mode === "mock" && <span className="ml-2 text-ink-tertiary">Demo</span>}
+          <span className={`ml-2 ${mode === "real" ? "text-data-positive" : mode === "mock" ? "text-ink-tertiary" : "text-accent"}`}>
+            {mode === "connecting" ? "连接中…" : mode === "real" ? "实时" : "Demo"}
+          </span>
         </div>
       </div>
 
@@ -172,7 +128,7 @@ function ProgressContent() {
         ))}
       </div>
 
-      {/* Debate preview */}
+      {/* Debate */}
       {showDebate && (
         <div className="grid grid-cols-2 gap-2.5 mb-7 animate-[slideIn_0.3s_ease]">
           <div className="p-3.5 bg-bg-surface border border-border-light">
