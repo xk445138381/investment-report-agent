@@ -1,8 +1,9 @@
-"""QVeris data provider — routes through QVeris API to cn_financial_pro / Hang Seng PolySource."""
+"""QVeris data provider — routes through QVeris API to cn_financial_pro / Hang Seng PolySource / Caidazi."""
 
 import os
 import json
 import logging
+import time
 from datetime import date, datetime
 from collections import defaultdict
 
@@ -18,6 +19,22 @@ EXECUTE_URL = f"{BASE_URL}/tools/execute"
 # Pre-discovered tool IDs
 TICK_TOOL = "hangseng_polysource.stock.tickquote.query.v2.e224ffde"
 HISTORY_TOOL = "cn_financial_pro.history_quotation.v1"
+NEWS_TOOL = "caidazi.report.query.v1.43d808fc"
+MACRO_TOOL = "cn_financial_pro.macro_china.v1"
+
+# Simple in-memory TTL cache to reduce QVeris credit usage
+_cache: dict[str, tuple[float, any]] = {}
+CACHE_TTL = {"prices": 300, "financials": 3600, "news": 600, "macro": 3600}
+
+def _get_cached(key: str, ttl: int, factory):
+    now = time.time()
+    if key in _cache:
+        expiry, val = _cache[key]
+        if now < expiry:
+            return val
+    val = factory()
+    _cache[key] = (now + ttl, val)
+    return val
 FINANCIALS_TOOL = "cn_financial_pro.financial_statements.v1"
 
 TICKER_MAP = {
@@ -60,6 +77,17 @@ class QverisProvider(DataProvider):
         return market in ("CN", "US", "HK")
 
     async def get_prices(self, ticker: str, start_date: date, end_date: date) -> list:
+        cache_key = f"prices:{ticker}:{start_date}:{end_date}"
+        now = time.time()
+        if cache_key in _cache:
+            expiry, val = _cache[cache_key]
+            if now < expiry:
+                return val
+        result = await self._fetch_prices(ticker, start_date, end_date)
+        _cache[cache_key] = (now + CACHE_TTL["prices"], result)
+        return result
+
+    async def _fetch_prices(self, ticker: str, start_date: date, end_date: date) -> list:
         code = TICKER_MAP.get(ticker, ticker)
         try:
             data = await self._call_tool(HISTORY_TOOL, {
@@ -75,6 +103,17 @@ class QverisProvider(DataProvider):
             return []
 
     async def get_financials(self, ticker: str, years: int = 5) -> list:
+        cache_key = f"financials:{ticker}:{years}"
+        now = time.time()
+        if cache_key in _cache:
+            expiry, val = _cache[cache_key]
+            if now < expiry:
+                return val
+        result = await self._fetch_financials(ticker, years)
+        _cache[cache_key] = (now + CACHE_TTL["financials"], result)
+        return result
+
+    async def _fetch_financials(self, ticker: str, years: int = 5) -> list:
         import asyncio as _asyncio
         mapping = TICKER_MAP.get(ticker)
         if not mapping:
@@ -150,7 +189,68 @@ class QverisProvider(DataProvider):
         return self._parse_financial_rows(all_rows, ticker)
 
     async def get_news(self, ticker: str, days: int = 30) -> list:
-        return []
+        cache_key = f"news:{ticker}:{days}"
+        now = time.time()
+        if cache_key in _cache:
+            expiry, val = _cache[cache_key]
+            if now < expiry:
+                return val
+        result = await self._fetch_news(ticker, days)
+        _cache[cache_key] = (now + CACHE_TTL["news"], result)
+        return result
+
+    async def _fetch_news(self, ticker: str, days: int) -> list:
+        try:
+            data = await self._call_tool(NEWS_TOOL, {
+                "input": ticker,
+                "reportType": "个股研报",
+            })
+            rows = data.get("rows", data.get("data", []))
+            if isinstance(data, list):
+                rows = data
+            results = []
+            # Caidazi response: {"code": 200, "data": {"hits": [...]}}
+            hits = data.get("data", {}).get("hits", rows)
+            if isinstance(hits, dict):
+                hits = hits.get("hits", hits.get("records", []))
+            for r in (hits or [])[:10]:
+                try:
+                    results.append({
+                        "title": str(r.get("title", r.get("report_title", ""))),
+                        "source": str(r.get("source", r.get("broker", r.get("author", "")))),
+                        "date": str(r.get("date", r.get("publish_date", r.get("publishDate", "")))),
+                        "summary": str(r.get("summary", r.get("abstract", r.get("content", "")))),
+                        "url": str(r.get("url", r.get("link", ""))),
+                    })
+                except Exception:
+                    continue
+            if results:
+                logger.info(f"Got {len(results)} news items for {ticker}")
+            return results
+        except Exception as e:
+            logger.debug(f"QVeris news({ticker}): {e}")
+            return []
+
+    async def get_macro(self) -> dict:
+        cache_key = "macro:latest"
+        now = time.time()
+        if cache_key in _cache:
+            expiry, val = _cache[cache_key]
+            if now < expiry:
+                return val
+        result = await self._fetch_macro()
+        _cache[cache_key] = (now + CACHE_TTL["macro"], result)
+        return result
+
+    async def _fetch_macro(self) -> dict:
+        try:
+            data = await self._call_tool(MACRO_TOOL, {"limit": 10})
+            rows = data.get("rows", data.get("data", []))
+            if isinstance(data, list):
+                rows = data
+            return {"indicators": rows if rows else [], "source": "cn_financial_pro.macro_china"}
+        except Exception:
+            return {"indicators": [], "source": "fallback"}
 
     # ── QVeris API ──
 
