@@ -169,17 +169,23 @@ class QverisProvider(DataProvider):
                     "revenue": g(inc, "totalRevenue"),
                     "operating_income": g(inc, "operatingIncome"),
                     "net_income": g(inc, "netIncome"), "eps_basic": g(inc, "eps"),
-                    "ebit": g(inc, "ebit"), "ebitda": g(inc, "ebitda"),
+                    "eps_diluted": g(inc, "eps"), "ebit": g(inc, "ebit"), "ebitda": g(inc, "ebitda"),
                     "total_assets": g(bs, "totalAssets"),
                     "total_liabilities": g(bs, "totalLiabilities"),
                     "total_equity": g(bs, "totalShareholderEquity"),
                     "current_assets": g(bs, "totalCurrentAssets"),
                     "current_liabilities": g(bs, "totalCurrentLiabilities"),
                     "cash_and_equivalents": g(bs, "cashAndCashEquivalentsAtCarryingValue"),
+                    "_shares_outstanding": g(bs, "commonStockSharesOutstanding"),
                     "operating_cash_flow": g(cf, "operatingCashflow"),
                     "capex": g(cf, "capitalExpenditures"),
-                    "free_cash_flow": g(cf, "operatingCashflow"),
+                    "free_cash_flow": None,  # computed below
                 })
+                # Compute FCF = OCF - Capex
+                ocf = results[-1].get("operating_cash_flow")
+                capex = results[-1].get("capex")
+                if ocf is not None:
+                    results[-1]["free_cash_flow"] = ocf - (capex or 0)
             except Exception: continue
         logger.info(f"US financials({ticker}): {len(results)} annual reports")
         return results

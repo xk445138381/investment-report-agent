@@ -157,6 +157,10 @@ async def run_valuation_agent(
 
 
 def _estimate_shares(fs) -> float:
+    # Try direct shares from provider (e.g., Alpha Vantage commonStockSharesOutstanding)
+    direct = getattr(fs, '_shares_outstanding', None)
+    if direct and direct > 0:
+        return direct
     if fs.eps_basic and fs.eps_basic > 0 and fs.net_income:
         return abs(fs.net_income / fs.eps_basic)
     return 1e9  # fallback: 1 billion shares
