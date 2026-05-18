@@ -17,7 +17,6 @@ BASE_URL = "https://qveris.ai/api/v1"
 EXECUTE_URL = f"{BASE_URL}/tools/execute"
 
 # Pre-discovered tool IDs
-TICK_TOOL = "hangseng_polysource.stock.tickquote.query.v2.e224ffde"
 HISTORY_TOOL = "cn_financial_pro.history_quotation.v1"
 NEWS_TOOL = "caidazi.news.query.v1.e76b9116"
 MACRO_TOOL = "cn_financial_pro.macro_china.v1"
@@ -26,15 +25,6 @@ MACRO_TOOL = "cn_financial_pro.macro_china.v1"
 _cache: dict[str, tuple[float, any]] = {}
 CACHE_TTL = {"prices": 300, "financials": 3600, "news": 600, "macro": 3600}
 
-def _get_cached(key: str, ttl: int, factory):
-    now = time.time()
-    if key in _cache:
-        expiry, val = _cache[key]
-        if now < expiry:
-            return val
-    val = factory()
-    _cache[key] = (now + ttl, val)
-    return val
 FINANCIALS_TOOL = "cn_financial_pro.financial_statements.v1"
 
 def _market(ticker: str) -> str:
