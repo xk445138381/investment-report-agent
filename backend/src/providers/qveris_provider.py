@@ -19,7 +19,7 @@ EXECUTE_URL = f"{BASE_URL}/tools/execute"
 # Pre-discovered tool IDs
 TICK_TOOL = "hangseng_polysource.stock.tickquote.query.v2.e224ffde"
 HISTORY_TOOL = "cn_financial_pro.history_quotation.v1"
-NEWS_TOOL = "caidazi.report.query.v1.43d808fc"
+NEWS_TOOL = "caidazi.news.query.v1.e76b9116"
 MACRO_TOOL = "cn_financial_pro.macro_china.v1"
 
 # Simple in-memory TTL cache to reduce QVeris credit usage
@@ -89,15 +89,23 @@ class QverisProvider(DataProvider):
 
     async def _fetch_prices(self, ticker: str, start_date: date, end_date: date) -> list:
         code = TICKER_MAP.get(ticker, ticker)
+        market = self._market(ticker)
         try:
-            data = await self._call_tool(HISTORY_TOOL, {
-                "codes": code,
-                "startdate": start_date.isoformat(),
-                "enddate": end_date.isoformat(),
-                "indicators": "stock_common",
-                "interval": "D",
-            })
-            return self._parse_history_prices(data, ticker)
+            if market == "US":
+                # Use Alpha Vantage for US stocks
+                data = await self._call_tool("alphavantage.time_series.daily.v1", {
+                    "symbol": code, "function": "TIME_SERIES_DAILY",
+                })
+                return self._parse_alphavantage_prices(data, ticker, start_date, end_date)
+            else:
+                data = await self._call_tool(HISTORY_TOOL, {
+                    "codes": code,
+                    "startdate": start_date.isoformat(),
+                    "enddate": end_date.isoformat(),
+                    "indicators": "stock_common",
+                    "interval": "D",
+                })
+                return self._parse_history_prices(data, ticker)
         except Exception as e:
             logger.warning(f"QVeris prices({ticker}): {e}")
             return []
@@ -115,6 +123,10 @@ class QverisProvider(DataProvider):
 
     async def _fetch_financials(self, ticker: str, years: int = 5) -> list:
         import asyncio as _asyncio
+        # cn_financial_pro tools are China-only; US stocks not yet supported for financials
+        if self._market(ticker) != "CN":
+            logger.info(f"Financials not yet available for non-CN ticker: {ticker}")
+            return []
         mapping = TICKER_MAP.get(ticker)
         if not mapping:
             return []
@@ -201,26 +213,22 @@ class QverisProvider(DataProvider):
 
     async def _fetch_news(self, ticker: str, days: int) -> list:
         try:
-            data = await self._call_tool(NEWS_TOOL, {
-                "input": ticker,
-                "reportType": "个股研报",
-            })
-            rows = data.get("rows", data.get("data", []))
-            if isinstance(data, list):
-                rows = data
-            results = []
+            data = await self._call_tool(NEWS_TOOL, {"input": ticker})
             # Caidazi response: {"code": 200, "data": {"hits": [...]}}
-            hits = data.get("data", {}).get("hits", rows)
-            if isinstance(hits, dict):
-                hits = hits.get("hits", hits.get("records", []))
-            for r in (hits or [])[:10]:
+            hits = data.get("data", {}).get("hits", data.get("hits", []))
+            if isinstance(data, list):
+                hits = data
+            results = []
+            for r in (hits or [])[:8]:
                 try:
+                    s = r.get("source", r)
+                    highlights = r.get("bodySegHighlight", [])
                     results.append({
-                        "title": str(r.get("title", r.get("report_title", ""))),
-                        "source": str(r.get("source", r.get("broker", r.get("author", "")))),
-                        "date": str(r.get("date", r.get("publish_date", r.get("publishDate", "")))),
-                        "summary": str(r.get("summary", r.get("abstract", r.get("content", "")))),
-                        "url": str(r.get("url", r.get("link", ""))),
+                        "title": str(s.get("title", "")),
+                        "source": str(s.get("siteName", s.get("source", ""))),
+                        "date": str(s.get("publishTime", s.get("effectiveTime", "")))[:10],
+                        "summary": str(highlights[0] if highlights else r.get("body", "")),
+                        "url": str(s.get("s3Url", "")),
                     })
                 except Exception:
                     continue
@@ -348,6 +356,31 @@ class QverisProvider(DataProvider):
                 continue
 
         logger.info(f"Parsed {len(results)} daily price rows for {ticker}")
+        return sorted(results, key=lambda x: x["date"])
+
+    def _parse_alphavantage_prices(self, data: dict, ticker: str,
+                                    start_date: date, end_date: date) -> list:
+        """Parse Alpha Vantage TIME_SERIES_DAILY response."""
+        ts = data.get("Time Series (Daily)", data.get("data", {}))
+        if not ts and isinstance(data, list):
+            return self._parse_history_prices(data, ticker)
+        results = []
+        for d_str, ohlc in sorted(ts.items()):
+            try:
+                d = date.fromisoformat(d_str)
+                if d < start_date or d > end_date:
+                    continue
+                results.append({
+                    "date": d,
+                    "open": float(ohlc.get("1. open", 0) or 0),
+                    "high": float(ohlc.get("2. high", 0) or 0),
+                    "low": float(ohlc.get("3. low", 0) or 0),
+                    "close": float(ohlc.get("4. close", 0) or 0),
+                    "volume": int(float(ohlc.get("5. volume", 0) or 0)),
+                })
+            except (ValueError, TypeError):
+                continue
+        logger.info(f"Parsed {len(results)} US daily prices for {ticker}")
         return sorted(results, key=lambda x: x["date"])
 
     def _parse_ticks_to_daily(self, data: dict, ticker: str,
