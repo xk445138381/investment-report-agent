@@ -201,11 +201,15 @@ class Orchestrator:
             )
         if agent_name == "risk_judge":
             from agents.debate.judge_agent import run_judge_agent
+            # Unwrap agent result wrapper: {"status", "phase", "result": {...}}
+            bull_w = ctx.state.get("bull_case", {})
+            bear_w = ctx.state.get("bear_case", {})
+            val_w = ctx.state.get("valuation", {})
             return await run_judge_agent(
                 ticker=ctx.ticker, company_name=ctx.company_name,
-                bull_result=ctx.state.get("bull_case", {}),
-                bear_result=ctx.state.get("bear_case", {}),
-                valuation=ctx.state.get("valuation", {}),
+                bull_result=bull_w.get("result", bull_w),
+                bear_result=bear_w.get("result", bear_w),
+                valuation=val_w.get("result", val_w),
             )
 
         # Phase 2: Analysis agents
