@@ -37,6 +37,11 @@ def _get_cached(key: str, ttl: int, factory):
     return val
 FINANCIALS_TOOL = "cn_financial_pro.financial_statements.v1"
 
+def _market(ticker: str) -> str:
+    if ".SH" in ticker.upper() or ".SZ" in ticker.upper(): return "CN"
+    if ".HK" in ticker.upper(): return "HK"
+    return "US"
+
 TICKER_MAP = {
     "600519.SH": "600519.SH", "600519": "600519.SH",
     "000858.SZ": "000858.SZ", "000858": "000858.SZ",
@@ -89,7 +94,7 @@ class QverisProvider(DataProvider):
 
     async def _fetch_prices(self, ticker: str, start_date: date, end_date: date) -> list:
         code = TICKER_MAP.get(ticker, ticker)
-        market = self._market(ticker)
+        market = _market(ticker)
         try:
             if market == "US":
                 # Use Alpha Vantage for US stocks
@@ -123,10 +128,61 @@ class QverisProvider(DataProvider):
 
     async def _fetch_financials(self, ticker: str, years: int = 5) -> list:
         import asyncio as _asyncio
-        # cn_financial_pro tools are China-only; US stocks not yet supported for financials
-        if self._market(ticker) != "CN":
-            logger.info(f"Financials not yet available for non-CN ticker: {ticker}")
-            return []
+        if _market(ticker) != "CN":
+            return await self._fetch_us_financials(ticker)
+
+    async def _fetch_us_financials(self, ticker: str) -> list:
+        """Fetch US stock financials via Alpha Vantage (3 parallel calls)."""
+        import asyncio as _asyncio
+        US_IS = "alphavantage.income_statement.list.v1.467a92c0"
+        US_BS = "alphavantage.balance_sheet.retrieve.v1.7aca3c4a"
+        US_CF = "alphavantage.cash_flow.retrieve.v1.467a92c0"
+
+        async def fetch(tool: str, fn: str):
+            try: return await self._call_tool(tool, {"symbol": ticker, "function": fn})
+            except Exception: return {}
+
+        is_d, bs_d, cf_d = await _asyncio.gather(
+            fetch(US_IS, "INCOME_STATEMENT"), fetch(US_BS, "BALANCE_SHEET"),
+            fetch(US_CF, "CASH_FLOW"), return_exceptions=True)
+
+        is_r = (is_d.get("annualReports", []) if isinstance(is_d, dict) else [])
+        bs_r = (bs_d.get("annualReports", []) if isinstance(bs_d, dict) else [])
+        cf_r = (cf_d.get("annualReports", []) if isinstance(cf_d, dict) else [])
+        if not is_r: return []
+
+        def g(r, *keys):
+            for k in keys:
+                v = r.get(k)
+                if v is not None and str(v) not in ("", "None"):
+                    try: return abs(float(v))
+                    except: pass
+            return None
+
+        results = []
+        for i, inc in enumerate(is_r[:5]):
+            try:
+                d_str = inc.get("fiscalDateEnding", ""); d = date.fromisoformat(d_str[:10]) if d_str else date.today()
+                bs, cf = (bs_r[i] if i < len(bs_r) else {}), (cf_r[i] if i < len(cf_r) else {})
+                results.append({"_report_date": d, "report_date": d,
+                    "fiscal_year": d.year, "fiscal_quarter": 4, "currency": "USD",
+                    "revenue": g(inc, "totalRevenue"),
+                    "operating_income": g(inc, "operatingIncome"),
+                    "net_income": g(inc, "netIncome"), "eps_basic": g(inc, "eps"),
+                    "ebit": g(inc, "ebit"), "ebitda": g(inc, "ebitda"),
+                    "total_assets": g(bs, "totalAssets"),
+                    "total_liabilities": g(bs, "totalLiabilities"),
+                    "total_equity": g(bs, "totalShareholderEquity"),
+                    "current_assets": g(bs, "totalCurrentAssets"),
+                    "current_liabilities": g(bs, "totalCurrentLiabilities"),
+                    "cash_and_equivalents": g(bs, "cashAndCashEquivalentsAtCarryingValue"),
+                    "operating_cash_flow": g(cf, "operatingCashflow"),
+                    "capex": g(cf, "capitalExpenditures"),
+                    "free_cash_flow": g(cf, "operatingCashflow"),
+                })
+            except Exception: continue
+        logger.info(f"US financials({ticker}): {len(results)} annual reports")
+        return results
         mapping = TICKER_MAP.get(ticker)
         if not mapping:
             return []
