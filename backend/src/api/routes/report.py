@@ -161,14 +161,21 @@ async def task_status(task_id: str):
 
 
 @router.get("/report/{task_id}")
-async def task_result(task_id: str):
-    """Get the full report result (JSON)."""
+async def task_result(task_id: str, include_charts: bool = True):
+    """Get the full report result (JSON). Set include_charts=false to skip base64 PNGs."""
     task = _tasks.get(task_id)
     if not task:
         raise HTTPException(404, "Task not found")
     if task["status"] != "completed":
         raise HTTPException(409, f"Task not completed (status: {task['status']})")
-    return task.get("result", {"note": "no result data"})
+    result = task.get("result", {"note": "no result data"})
+    if not include_charts:
+        # Remove heavy base64 chart data
+        charts = result.get("chart_generator", {}).get("result", [])
+        if isinstance(charts, list):
+            for c in charts:
+                c.pop("png_base64", None)
+    return result
 
 
 @router.get("/report/{task_id}/stream")
