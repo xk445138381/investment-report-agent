@@ -20,8 +20,8 @@ class ValuationParams:
     stage1_years: int = 5
     stage1_growth_cap: float = 0.15
     stage2_years: int = 5
-    owner_earnings_discount: float = 0.09
-    owner_earnings_mos: float = 0.25
+    owner_earnings_discount: float = 0.07
+    owner_earnings_mos: float = 0.15
     premium_for_roe_2x: float = 0.15
     premium_for_growth_edge: float = 0.10
     ri_mos: float = 0.20

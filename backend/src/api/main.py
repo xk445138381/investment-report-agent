@@ -2,8 +2,11 @@
 
 import logging
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()  # Load .env file into os.environ
 
 from api.config_accessor import get_config as _get_cfg
 from api.routes import report, template, upload, user, config_routes

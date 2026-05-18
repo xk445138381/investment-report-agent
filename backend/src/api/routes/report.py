@@ -76,22 +76,57 @@ async def _run_generation(task_id, req, orchestrator, route_result, resolved_tic
             config=config,
         )
 
-        # Pre-fetch data if AkShare provider is available
+        # Pre-fetch data: QVeris → AkShare → continue without data
         try:
             from datetime import date as dt_date
-            from providers.akshare_provider import AkShareProvider
-            ak = AkShareProvider()
-            if await ak.health_check():
-                end = dt_date.today()
-                start = end.replace(year=end.year - 3)
-                prices = await ak.get_prices(resolved_ticker, start, end)
-                ctx.state["_prices"] = prices
-                logger.info(f"Pre-fetched {len(prices)} price records for {resolved_ticker}")
-                financials = await ak.get_financials(resolved_ticker)
-                ctx.state["_financials"] = financials
-                logger.info(f"Pre-fetched {len(financials)} financial records for {resolved_ticker}")
-        except Exception:
-            logger.warning("AkShare not available, proceeding without pre-fetched data")
+            end = dt_date.today()
+            start = end.replace(year=end.year - 3)
+            prices = []
+            financials = []
+
+            # 1. Try QVeris first (routes through qveris.ai → THS iFinD / Alpha Vantage)
+            try:
+                from providers.qveris_provider import QverisProvider
+                qv = QverisProvider()
+                if await qv.health_check():
+                    prices = await qv.get_prices(resolved_ticker, start, end)
+                    logger.info(f"QVeris: got {len(prices)} price records for {resolved_ticker}")
+                    financials = await qv.get_financials(resolved_ticker, years=3)
+                    logger.info(f"QVeris: got {len(financials)} financial records for {resolved_ticker}")
+            except Exception as e:
+                logger.info(f"QVeris not available: {e}")
+
+            # 2. Fall back to AkShare if QVeris returned no data
+            if not prices or not financials:
+                try:
+                    from providers.akshare_provider import AkShareProvider
+                    ak = AkShareProvider()
+                    if await ak.health_check():
+                        if not prices:
+                            prices = await ak.get_prices(resolved_ticker, start, end)
+                            logger.info(f"AkShare: got {len(prices)} price records for {resolved_ticker}")
+                        if not financials:
+                            financials = await ak.get_financials(resolved_ticker)
+                            logger.info(f"AkShare: got {len(financials)} financial records for {resolved_ticker}")
+                except Exception:
+                    logger.warning("AkShare not available, proceeding without pre-fetched data")
+
+            # Convert dicts to attribute-accessible objects (agents use latest.revenue, etc.)
+            class _FallbackObj:
+                """Object that returns None for missing attributes instead of AttributeError."""
+                def __init__(self, **kwargs):
+                    self.__dict__.update(kwargs)
+                def __getattr__(self, name):
+                    return None  # Missing fields → None instead of crash
+            def _to_obj(d):
+                if isinstance(d, dict):
+                    return _FallbackObj(**{k: _to_obj(v) for k, v in d.items()})
+                return d
+            ctx.state["_prices"] = [_to_obj(p) for p in prices] if prices else []
+            ctx.state["_financials"] = [_to_obj(f) for f in financials] if financials else []
+            logger.info(f"Data fetch complete: {len(prices)} prices, {len(financials)} financials")
+        except Exception as e:
+            logger.warning(f"Data pre-fetch failed: {e}", exc_info=True)
 
         async def progress_cb(phase, pct, msg):
             _tasks[task_id]["current_phase"] = phase
@@ -121,7 +156,19 @@ async def task_status(task_id: str):
         "current_phase": task.get("current_phase"),
         "progress_pct": task.get("progress_pct", 0),
         "started_at": task.get("started_at"),
+        "error": task.get("error"),
     }
+
+
+@router.get("/report/{task_id}")
+async def task_result(task_id: str):
+    """Get the full report result (JSON)."""
+    task = _tasks.get(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if task["status"] != "completed":
+        raise HTTPException(409, f"Task not completed (status: {task['status']})")
+    return task.get("result", {"note": "no result data"})
 
 
 @router.get("/report/{task_id}/stream")
@@ -145,7 +192,7 @@ async def task_stream(task_id: str, request: Request):
             await asyncio.sleep(0.5)
 
         if task["status"] == "completed":
-            yield f"event: complete\ndata: report generated\n\n"
+            yield f"event: complete\ndata: {{\"task_id\": \"{task_id}\", \"status\": \"completed\"}}\n\n"
         elif task["status"] == "failed":
             yield f"event: error\ndata: {task.get('error', 'Unknown error')}\n\n"
 

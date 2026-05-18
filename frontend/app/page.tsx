@@ -1,283 +1,292 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 
-/* ── Placeholder SVG for report preview screen ── */
-function ReportPlaceholder() {
+type Depth = "brief" | "deep" | "custom";
+
+const PIPELINE_PHASES = [
+  { id: "p1", num: "01", name: "数据聚合", agents: ["行情数据", "财报数据", "公告新闻", "宏观行业"] },
+  { id: "p2", num: "02", name: "深度分析", agents: ["财务分析", "估值建模", "行业竞争", "公司治理"] },
+  { id: "p3", num: "03", name: "多空辩论", agents: ["多头论点", "空头论点", "风险裁判"] },
+  { id: "p4", num: "04", name: "统稿排版", agents: ["章节撰写", "图表生成", "标题摘要"] },
+];
+
+const ALL_AGENTS = PIPELINE_PHASES.flatMap((p) => p.agents);
+
+const SUGGESTIONS = ["贵州茅台", "宁德时代", "腾讯控股", "Apple", "五粮液", "恒瑞医药"];
+
+const DEPTHS: { id: Depth; name: string; time: string; desc: string }[] = [
+  { id: "brief", name: "快速简报", time: "约 45s", desc: "精简版：核心财务 + 简要估值 + 关键风险。6 Agent 管线。" },
+  { id: "deep", name: "深度研报", time: "约 2min", desc: "全流程分析：四阶段管线、牛熊辩论、完整估值模型。14 Agent。" },
+  { id: "custom", name: "自定义", time: "按配置", desc: "自由选择 Agent 组合、调整辩论轮次、指定 LLM 模型。" },
+];
+
+const TEMPLATES = [
+  { id: "default", name: "深度研报（默认）", desc: "7 章节，10 图表" },
+  { id: "brief_tpl", name: "快速简报", desc: "4 章节，4 图表" },
+  { id: "cn_equity", name: "A 股专用", desc: "含行业对标、政策分析" },
+];
+
+export default function HomePage() {
+  const router = useRouter();
+  const [ticker, setTicker] = useState("");
+  const [depth, setDepth] = useState<Depth>("deep");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [template, setTemplate] = useState("default");
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([...ALL_AGENTS]);
+
+  const handleStart = useCallback(() => {
+    if (!ticker.trim()) return;
+    router.push(`/progress?ticker=${encodeURIComponent(ticker)}&depth=${depth}`);
+  }, [ticker, depth, router]);
+
+  const toggleAgent = (name: string) => {
+    setSelectedAgents((prev) =>
+      prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]
+    );
+  };
+
   return (
-    <div className="max-w-3xl mx-auto space-y-8 py-12">
-      <div className="text-center space-y-3 mb-12">
-        <p className="text-ink-tertiary text-sm tracking-widest uppercase font-mono">DEEP DIVE REPORT</p>
-        <h1 className="font-serif text-3xl font-bold text-ink-primary">
-          贵州茅台 (600519.SH)
-        </h1>
-        <p className="text-lg text-ink-secondary font-serif">护城河坚固，估值具备吸引力</p>
+    <div className="max-w-[720px] mx-auto px-8 py-12">
+      {/* Hero */}
+      <div className="text-center mb-10">
+        <h2 className="font-serif text-[28px] font-bold text-ink-primary tracking-[0.04em] mb-2">
+          生成专业投资研究报告
+        </h2>
+        <p className="text-sm text-ink-secondary max-w-[420px] mx-auto leading-relaxed">
+          多 Agent 协作 — 数据聚合、深度分析、多空辩论、统稿排版，四阶段管线产出机构级研报。
+        </p>
       </div>
 
-      {/* Rating Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        {[
-          { label: "财务健康", score: "优秀", color: "text-data-positive" },
-          { label: "估值水平", score: "低估", color: "text-accent" },
-          { label: "成长前景", score: "稳健", color: "text-ink-secondary" },
-          { label: "风险等级", score: "中等", color: "text-ink-secondary" },
-        ].map((c) => (
-          <div key={c.label} className="bg-bg-surface border border-border-light p-4 text-center">
-            <p className="text-xs text-ink-tertiary mb-1">{c.label}</p>
-            <p className={`text-lg font-serif font-semibold ${c.color}`}>{c.score}</p>
-          </div>
+      {/* Command bar */}
+      <div
+        className={`flex items-center gap-2 max-w-[520px] mx-auto bg-bg-elevated border px-4 py-0.5 transition-colors duration-300 ${
+          ticker ? "border-accent" : "border-border-light"
+        }`}
+      >
+        <span className="font-mono text-[15px] text-ink-tertiary">$</span>
+        <input
+          type="text"
+          value={ticker}
+          onChange={(e) => setTicker(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleStart()}
+          placeholder="输入公司名称或股票代码…"
+          autoFocus
+          className="flex-1 border-none outline-none text-sm font-sans bg-transparent text-ink-primary py-2.5 placeholder:text-ink-tertiary"
+        />
+        <button
+          onClick={handleStart}
+          disabled={!ticker.trim()}
+          className="px-5 py-2 text-[13px] font-medium font-sans border-none cursor-pointer bg-accent text-white transition-colors duration-200 hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+        >
+          生成报告 →
+        </button>
+      </div>
+
+      {/* Suggestions */}
+      <div className="flex justify-center gap-1.5 mt-3 flex-wrap">
+        {SUGGESTIONS.map((s) => (
+          <button
+            key={s}
+            onClick={() => setTicker(s)}
+            className="px-3.5 py-1 text-[11px] font-sans bg-bg-surface text-ink-secondary border border-border-light cursor-pointer transition-all duration-150 hover:border-border hover:text-ink-primary"
+          >
+            {s}
+          </button>
         ))}
       </div>
 
-      {/* Key Data */}
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-1 bg-bg-surface border border-border-light p-6 text-center space-y-2">
-          <p className="text-xs text-ink-tertiary tracking-widest uppercase">当前价格</p>
-          <p className="data-headline">1,680</p>
-          <p className="text-xs text-ink-tertiary">CNY</p>
+      {/* Depth selector */}
+      <div className="mt-8">
+        <div className="text-center font-serif text-[15px] text-ink-primary mb-3.5 font-semibold">
+          分析深度
         </div>
-        <div className="col-span-1 bg-bg-surface border border-border-light p-6 text-center space-y-2">
-          <p className="text-xs text-ink-tertiary tracking-widest uppercase">目标价格</p>
-          <p className="data-headline">1,970</p>
-          <p className="text-xs text-accent">+17.3% 上行空间</p>
-        </div>
-        <div className="col-span-1 bg-bg-surface border border-border-light p-6 text-center space-y-2">
-          <p className="text-xs text-ink-tertiary tracking-widest uppercase">综合评级</p>
-          <p className="data-headline text-accent">买入</p>
-          <p className="text-xs text-ink-tertiary">置信度 72%</p>
-        </div>
-      </div>
-
-      {/* TOC */}
-      <div className="border-t border-b border-border-light py-6">
-        <h2 className="font-serif text-lg font-semibold mb-4 text-ink-primary">目录</h2>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          {[
-            "1. 投资摘要",
-            "2. 公司概况",
-            "3. 行业分析",
-            "4. 财务分析",
-            "5. 估值分析",
-            "6. 风险提示",
-            "7. 投资建议",
-          ].map((s) => (
-            <p key={s} className="text-ink-secondary hover:text-ink-primary cursor-pointer transition-colors">
-              {s}
-            </p>
+        <div className="flex gap-2.5 justify-center">
+          {DEPTHS.map((d) => (
+            <div
+              key={d.id}
+              onClick={() => setDepth(d.id)}
+              className={`w-[200px] p-3.5 cursor-pointer transition-all duration-200 ${
+                depth === d.id
+                  ? "bg-accent-soft border-accent"
+                  : "bg-bg-surface border-border-light"
+              } border`}
+            >
+              <div className="font-serif text-sm font-semibold text-ink-primary mb-1">{d.name}</div>
+              <div className="font-mono text-[10px] text-ink-tertiary mb-1.5">{d.time}</div>
+              <div className="text-[11px] text-ink-secondary leading-relaxed">{d.desc}</div>
+            </div>
           ))}
         </div>
       </div>
 
-      {/* Chart placeholder */}
-      <div className="bg-bg-surface border border-border-light p-8 flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="w-64 h-32 mx-auto flex items-end justify-between gap-2 px-4">
-            {[40, 65, 45, 75, 50, 85, 60, 70].map((h, i) => (
-              <div key={i} className="flex-1 bg-data-series-3" style={{ height: `${h}%` }} />
-            ))}
-          </div>
-          <p className="text-xs text-ink-tertiary">营收/净利润趋势图</p>
-        </div>
+      {/* Advanced toggle */}
+      <div className="text-center mt-6">
+        <button
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="text-xs text-ink-tertiary cursor-pointer bg-transparent border-none font-sans py-1 transition-colors duration-200 hover:text-accent"
+        >
+          {showAdvanced ? "收起高级配置 ▲" : "高级配置… ▼"}
+        </button>
       </div>
 
-      <p className="text-xs text-ink-tertiary text-center pt-8">
-        AI 辅助生成 · 仅供参考 · 不构成投资建议
-      </p>
-    </div>
-  );
-}
-
-/* ── Main Page Component ── */
-export default function Home() {
-  const [input, setInput] = useState("");
-  const [view, setView] = useState<"chat" | "report">("chat");
-  const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
-  const [status, setStatus] = useState<"idle" | "running" | "done">("idle");
-  const [progress, setProgress] = useState({ phase: "", pct: 0 });
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const handleSubmit = async () => {
-    if (!input.trim() || status === "running") return;
-    const userMsg = input.trim();
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", text: userMsg }]);
-    setStatus("running");
-
-    // Simulate progress for demo (no backend connected)
-    const phases = [
-      { phase: "数据采集", pct: 20 },
-      { phase: "财务分析", pct: 45 },
-      { phase: "多空辩论", pct: 70 },
-      { phase: "统稿排版", pct: 90 },
-    ];
-    for (const p of phases) {
-      await new Promise((r) => setTimeout(r, 200));
-      setProgress(p);
-    }
-    setStatus("done");
-    setProgress({ phase: "完成", pct: 100 });
-    setMessages((prev) => [
-      ...prev,
-      { role: "assistant", text: "报告已生成。" },
-    ]);
-    // Don't auto-switch — let user click "查看完整报告"
-  };
-
-  const suggestions = [
-    "分析贵州茅台",
-    "快速看下宁德时代",
-    "深度研报 腾讯控股",
-  ];
-
-  if (view === "report") {
-    return (
-      <div className="min-h-[calc(100vh-73px)] px-8 pb-16">
-        {/* Top bar */}
-        <div className="sticky top-0 bg-bg-warm/95 backdrop-blur-sm border-b border-border-light py-3 flex items-center justify-between mb-8">
-          <button
-            onClick={() => { setView("chat"); setMessages([]); setStatus("idle"); }}
-            className="text-sm text-ink-secondary hover:text-ink-primary transition-colors"
-          >
-            ← 返回对话
-          </button>
-          <div className="flex gap-4">
-            <button className="px-5 py-2 text-sm border border-border bg-bg-surface text-ink-primary hover:bg-bg-warm transition-colors">
-              导出 PDF
-            </button>
-            <button className="px-5 py-2 text-sm border border-border bg-bg-surface text-ink-primary hover:bg-bg-warm transition-colors">
-              导出 Word
-            </button>
-          </div>
-        </div>
-        <ReportPlaceholder />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-73px)] px-8 pb-16">
-      {messages.length === 0 ? (
-        /* ── Blank state: command entry ── */
-        <div className="flex flex-col items-center gap-12 max-w-2xl w-full">
-          <div className="text-center space-y-6">
-            <div className="flex items-center justify-center gap-4">
-              <div className="w-12 h-px bg-border" />
-              <h1 className="font-serif text-4xl font-bold text-ink-primary tracking-wide">
-                研报 Agent
-              </h1>
-              <div className="w-12 h-px bg-border" />
-            </div>
-            <p className="text-lg text-ink-secondary leading-relaxed max-w-md mx-auto">
-              基于多 Agent 协作的专业投资研究报告生成
-            </p>
-          </div>
-
-          {/* Suggestions */}
-          <div className="flex flex-wrap justify-center gap-3">
-            {suggestions.map((s) => (
-              <button
-                key={s}
-                onClick={() => { setInput(s); inputRef.current?.focus(); }}
-                className="px-5 py-2.5 text-sm text-ink-secondary bg-bg-surface
-                           border border-border-light hover:border-border
-                           hover:text-ink-primary transition-all duration-200"
-              >
-                {s}
-              </button>
+      {/* Advanced wizard */}
+      {showAdvanced && (
+        <div className="mt-5 p-6 bg-bg-surface border border-border-light animate-[slideIn_0.3s_ease]">
+          {/* Step indicator */}
+          <div className="flex items-center justify-center gap-0 mb-6">
+            {[
+              { n: 1, t: "模板" },
+              { n: 2, t: "Agent" },
+              { n: 3, t: "参数" },
+            ].map((s, i) => (
+              <div key={s.n} className="flex items-center gap-0">
+                {i > 0 && (
+                  <div
+                    className={`w-9 h-px ${
+                      wizardStep > i ? "bg-accent" : "bg-border-light"
+                    }`}
+                  />
+                )}
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center font-mono text-[11px] font-medium ${
+                    wizardStep >= s.n
+                      ? "bg-accent text-white"
+                      : "bg-bg-surface text-ink-tertiary border border-border-light"
+                  }`}
+                >
+                  {wizardStep > s.n ? "✓" : s.n}
+                </div>
+                <span
+                  className={`text-[10px] ml-1.5 ${
+                    wizardStep >= s.n
+                      ? "text-ink-primary font-semibold"
+                      : "text-ink-tertiary"
+                  }`}
+                >
+                  {s.t}
+                </span>
+              </div>
             ))}
           </div>
 
-          {/* Command bar */}
-          <div className="w-full">
-            <div
-              className="flex items-center gap-4 px-6 py-4 bg-bg-elevated
-                          border border-border-light
-                          focus-within:border-accent transition-colors duration-300"
-            >
-              <span className="text-ink-tertiary text-lg">$</span>
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                placeholder="输入公司名称或股票代码…"
-                className="flex-1 bg-transparent text-lg text-ink-primary
-                           placeholder:text-ink-tertiary outline-none font-sans"
-              />
-              <button
-                onClick={handleSubmit}
-                disabled={status === "running"}
-                className="px-6 py-2 bg-accent text-white text-sm font-medium
-                           hover:bg-accent-hover disabled:opacity-40
-                           transition-colors duration-200"
-              >
-                {status === "running" ? "生成中…" : "生成报告 →"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* ── Chat flow ── */
-        <div className="w-full max-w-3xl space-y-8">
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
+          {/* Step 1: Template */}
+          {wizardStep === 1 &&
+            TEMPLATES.map((t) => (
               <div
-                className={`max-w-[75%] px-6 py-4 ${
-                  m.role === "user"
-                    ? "bg-accent-soft text-ink-primary border border-accent-soft"
-                    : "bg-bg-surface text-ink-primary border border-border-light"
+                key={t.id}
+                onClick={() => {
+                  setTemplate(t.id);
+                  setWizardStep(2);
+                }}
+                className={`p-3 mb-1.5 cursor-pointer flex justify-between items-center ${
+                  template === t.id
+                    ? "bg-accent-soft border border-accent"
+                    : "bg-bg-elevated border border-border-light"
                 }`}
               >
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</p>
+                <div>
+                  <div className="font-serif text-[13px] font-semibold text-ink-primary">{t.name}</div>
+                  <div className="text-[11px] text-ink-secondary mt-0.5">{t.desc}</div>
+                </div>
+                <div className="font-mono text-[11px] text-ink-tertiary">
+                  {template === t.id ? "✓" : ""}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {/* Progress indicator */}
-          {status === "running" && (
-            <div className="flex justify-start">
-              <div className="max-w-[75%] w-full px-6 py-5 bg-bg-surface border border-border-light space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-2.5 h-2.5 bg-accent" />
-                  <span className="text-sm text-ink-secondary">
-                    {progress.phase || "准备中…"}
-                  </span>
-                  <span className="text-xs text-ink-tertiary font-mono ml-auto">
-                    {progress.pct}%
-                  </span>
-                </div>
-                <div className="w-full h-1 bg-border-light">
-                  <div
-                    className="h-full bg-accent transition-all duration-500 ease-out"
-                    style={{ width: `${progress.pct}%` }}
-                  />
-                </div>
+          {/* Step 2: Agents */}
+          {wizardStep === 2 && (
+            <div>
+              <div className="text-xs text-ink-secondary mb-3 text-center">
+                勾选要运行的 Agent（默认全选）
+              </div>
+              <div className="grid grid-cols-2 gap-1 mb-3.5">
+                {PIPELINE_PHASES.map((p) => (
+                  <div key={p.id} className="contents">
+                    <div className="col-span-2 text-[10px] text-ink-tertiary mt-1.5 font-mono">
+                      Phase {p.num} · {p.name}
+                    </div>
+                    {p.agents.map((a) => (
+                      <label
+                        key={a}
+                        className={`flex items-center gap-1.5 px-1.5 py-1 text-[11px] cursor-pointer text-ink-secondary font-sans ${
+                          selectedAgents.includes(a) ? "bg-accent-soft" : ""
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedAgents.includes(a)}
+                          onChange={() => toggleAgent(a)}
+                          className="accent-accent"
+                        />
+                        {a}
+                      </label>
+                    ))}
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* View report button after completion */}
-          {status === "done" && (
-            <div className="flex justify-center pt-4">
+          {/* Step 3: Confirm */}
+          {wizardStep === 3 && (
+            <div className="text-center">
+              <div className="text-xs text-ink-secondary mb-4">配置摘要</div>
+              <div className="text-[13px] text-ink-primary bg-bg-elevated p-3 border border-border-light text-left leading-loose">
+                模板：<span className="font-mono text-[11px]">{template}</span>
+                <br />
+                Agent：<span className="font-mono text-[11px]">{selectedAgents.length} / {ALL_AGENTS.length}</span>
+                <br />
+                LLM：<span className="font-mono text-[11px]">DeepSeek V4 Pro</span>
+              </div>
+              <div className="mt-4 text-[11px] text-ink-tertiary">
+                准备好后关闭高级配置，点击命令栏「生成报告」启动。
+              </div>
+            </div>
+          )}
+
+          {/* Wizard navigation */}
+          <div className="flex justify-center gap-2.5 mt-4">
+            {wizardStep > 1 && (
               <button
-                onClick={() => setView("report")}
-                className="px-8 py-3 bg-accent text-white text-sm font-medium
-                           hover:bg-accent-hover transition-colors duration-200"
+                onClick={() => setWizardStep(wizardStep - 1)}
+                className="px-4 py-1.5 text-[11px] cursor-pointer font-sans border border-border-light bg-bg-elevated text-ink-secondary"
               >
-                查看完整报告
+                ← 上一步
               </button>
-            </div>
-          )}
+            )}
+            {wizardStep < 3 && (
+              <button
+                onClick={() => setWizardStep(wizardStep + 1)}
+                className="px-5 py-1.5 text-[11px] font-medium cursor-pointer font-sans border-none bg-accent text-white"
+              >
+                下一步 →
+              </button>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Pipeline preview */}
+      <div className="flex items-start justify-center gap-0 mt-8">
+        {PIPELINE_PHASES.map((p, i) => (
+          <div key={p.id} className="flex items-start gap-0">
+            {i > 0 && <div className="px-1 py-2 text-xs text-border">→</div>}
+            <div className="text-center w-16">
+              <div className="font-mono text-[9px] text-ink-tertiary mb-0.5">{p.num}</div>
+              <div className="text-[10px] text-ink-secondary font-medium">{p.name}</div>
+              <div className="text-[8px] text-ink-tertiary mt-1 leading-[1.4]">
+                {p.agents.map((a) => (
+                  <div key={a}>{a}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

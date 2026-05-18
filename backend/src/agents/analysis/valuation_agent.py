@@ -31,7 +31,10 @@ async def run_valuation_agent(
         return {"ticker": ticker, "error": "insufficient_data"}
 
     params = ValuationParams()
-    latest = financials[-1]
+    # Prefer annual (Q4) data for valuation — quarterly data is cumulative in Chinese reporting
+    annuals = [f for f in financials if getattr(f, 'fiscal_quarter', 0) == 4]
+    valuation_fin = annuals[-1] if annuals else financials[-1]
+    latest = valuation_fin
     current_price = prices[-1].close if prices else None
     if current_price is None:
         return {"ticker": ticker, "error": "no_price_data"}
@@ -44,11 +47,11 @@ async def run_valuation_agent(
         (latest.operating_cash_flow or 0) - (latest.capex or 0))
     if fcf and fcf > 0:
         dcf = calculate_dcf_three_stage(
-            last_fcf=fcf, historical_fcf_cagr=0.05, wacc=0.10,
+            last_fcf=fcf, historical_fcf_cagr=0.05, wacc=0.0,
             net_debt=_safe_net_debt(latest),
             cash=latest.cash_and_equivalents or 0,
             minority_interest=0, shares_outstanding=_estimate_shares(latest),
-            params=params, beta=1.0, equity_weight=0.7, debt_weight=0.3,
+            params=params, beta=0.7, equity_weight=0.90, debt_weight=0.10,
             interest_expense=0, total_debt=latest.total_liabilities or 0,
             tax_rate=0.25, market=market,
         )
@@ -61,13 +64,17 @@ async def run_valuation_agent(
 
     # Model 2: Owner Earnings
     if latest.net_income and latest.net_income > 0:
+        prev = financials[-2] if len(financials) >= 2 else None
         oe = calculate_owner_earnings_value(
             net_income=latest.net_income,
             depreciation_amortization=_estimate_da(latest),
             total_capex=latest.capex or 0,
             financial_data={"current_assets": latest.current_assets or 0,
                             "current_liabilities": latest.current_liabilities or 0},
-            prev_financial_data={"current_assets": 0, "current_liabilities": 0},
+            prev_financial_data={
+                "current_assets": getattr(prev, 'current_assets', 0) or 0,
+                "current_liabilities": getattr(prev, 'current_liabilities', 0) or 0,
+            } if prev else {"current_assets": 0, "current_liabilities": 0},
             historical_da=[_estimate_da(latest)],
             historical_capex=[latest.capex or 0],
             shares_outstanding=_estimate_shares(latest),
