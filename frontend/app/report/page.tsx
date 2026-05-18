@@ -35,9 +35,11 @@ function ReportContent() {
   const ticker = params.get("ticker") || "贵州茅台";
   const taskId = params.get("task");
 
-  const [data, setData] = useState(taskId ? null : MOCK);
-  const [newsItems, setNewsItems] = useState<NewsItem[]>(taskId ? [] : MOCK_NEWS);
-  const [loading, setLoading] = useState(!!taskId);
+  type ChartData = { chart_id: string; title: string; caption?: string; png_base64: string; position: string; width_px?: number };
+const [data, setData] = useState(taskId ? null : MOCK);
+const [newsItems, setNewsItems] = useState<NewsItem[]>(taskId ? [] : MOCK_NEWS);
+const [charts, setCharts] = useState<ChartData[]>([]);
+const [loading, setLoading] = useState(!!taskId);
 
   useEffect(() => {
     if (!taskId) return;
@@ -68,6 +70,9 @@ function ReportContent() {
           date: String(e.date || ""),
           source: String(e.source || ""),
         })));
+        // Chart data
+        const chartsRaw = raw?.chart_generator?.result || [];
+        setCharts(Array.isArray(chartsRaw) ? chartsRaw : []);
       } catch {
         setData(MOCK);
         setNewsItems(MOCK_NEWS);
@@ -158,15 +163,33 @@ function ReportContent() {
         </div>
       )}
 
-      {/* Chart (if price data available) */}
-      {current_price > 0 && (
+      {/* Charts from pipeline */}
+      {charts.length > 0 && (
+        <div className="space-y-6 mb-8">
+          {charts.map((c) => (
+            <div key={c.chart_id} className="bg-bg-surface border border-border-light p-4">
+              <img
+                src={`data:image/png;base64,${c.png_base64}`}
+                alt={c.title}
+                className="w-full h-auto"
+                style={{ maxWidth: c.width_px ? `${c.width_px}px` : '100%' }}
+              />
+              <div className="text-[11px] text-ink-tertiary text-center mt-2">{c.title}</div>
+              {c.caption && <div className="text-[10px] text-ink-tertiary text-center mt-0.5">{c.caption}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Chart placeholder fallback (when no charts from pipeline) */}
+      {charts.length === 0 && current_price > 0 && (
         <div className="mb-8 p-8 bg-bg-surface border border-dashed border-border text-center">
           <div className="flex items-end justify-center gap-2 h-[100px]">
             {[40,55,45,70,55,82,62,75].map((h, i) => (
               <div key={i} className={`flex-1 max-w-[40px] ${h === 82 ? "bg-accent" : "bg-data-series-3"} opacity-70`} style={{ height: `${h}%` }} />
             ))}
           </div>
-          <div className="text-[11px] text-ink-tertiary mt-3.5">股价走势（示意 · 图表引擎待接入前端渲染）</div>
+          <div className="text-[11px] text-ink-tertiary mt-3.5">股价走势（图表引擎就绪，生成深度研报以渲染）</div>
         </div>
       )}
 
