@@ -5,8 +5,18 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import orjson
 
 load_dotenv()  # Load .env file into os.environ
+
+
+class ORJSONResponse(JSONResponse):
+    """Fast JSON response using orjson (handles Unicode/binary properly)."""
+    media_type = "application/json"
+
+    def render(self, content) -> bytes:
+        return orjson.dumps(content, option=orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_NON_STR_KEYS)
 
 from api.config_accessor import get_config as _get_cfg
 from api.routes import report, template, upload, user, config_routes
@@ -27,6 +37,7 @@ app = FastAPI(
     version="0.1.0",
     description="Multi-Agent Investment Report Generation System",
     lifespan=lifespan,
+    default_response_class=ORJSONResponse,
 )
 
 app.add_middleware(
