@@ -1,6 +1,7 @@
 """Risk Judge Agent — evaluates bull/bear debate, produces risk assessment."""
 
-import logging
+import asyncio, json, logging
+from langchain_core.messages import HumanMessage
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,27 @@ async def run_judge_agent(
 ) -> dict:
     """Evaluate debate and produce final risk assessment."""
 
+    # Try LLM for richer analysis
+    try:
+        from config.loader import load_config, LLMRegistry
+        model = LLMRegistry(load_config()).get_model("risk_judge")
+        if model:
+            prompt = JUDGE_PROMPT.format(
+                bull_arguments=json.dumps(bull_result.get("arguments", []), ensure_ascii=False, indent=2),
+                bear_arguments=json.dumps(bear_result.get("arguments", []), ensure_ascii=False, indent=2),
+                valuation=json.dumps(valuation, ensure_ascii=False, indent=2),
+            )
+            resp = await asyncio.wait_for(model.ainvoke([HumanMessage(content=prompt)]), timeout=20)
+            text = resp.content.strip()
+            if text.startswith("```"): text = text.split("\n", 1)[1].rsplit("\n```", 1)[0]
+            data = json.loads(text)
+            if data.get("verdict"):
+                logger.info("Judge agent: LLM verdict=%s conf=%s", data.get("verdict"), data.get("verdict_confidence"))
+                return data
+    except Exception as e:
+        logger.warning(f"Judge LLM failed, using rules: {e}")
+
+    # Rule-based fallback
     # Build confidence intervals from valuation
     current = valuation.get("current_price", 0) or 0
     upside = valuation.get("weighted_upside_pct", 0) or 0

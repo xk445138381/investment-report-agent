@@ -84,9 +84,9 @@
     "valuation": {"llm": "provider_deep", "python_calculator": "valuation_engine", "output_schema": "ValuationResult", "timeout_seconds": 180},
     "industry_competition": {"llm": "provider_deep", "output_schema": "IndustryCompetitionResult", "timeout_seconds": 120},
     "corporate_governance": {"llm": "provider_deep", "output_schema": "GovernanceResult", "timeout_seconds": 120},
-    "bull_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 120},
-    "bear_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 120},
-    "risk_judge": {"llm": "provider_deep", "output_schema": "RiskJudgeResult", "timeout_seconds": 120},
+    "bull_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 25},
+    "bear_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 25},
+    "risk_judge": {"llm": "provider_deep", "output_schema": "RiskJudgeResult", "timeout_seconds": 25},
     "section_writer": {"llm": "provider_deep", "output_schema": "ReportSections", "timeout_seconds": 300},
     "chart_generator": {"llm": "provider_quick", "output_schema": "ChartOutputs", "timeout_seconds": 60},
     "title_summary": {"llm": "provider_quick", "output_schema": "ReportMetadata", "timeout_seconds": 30}

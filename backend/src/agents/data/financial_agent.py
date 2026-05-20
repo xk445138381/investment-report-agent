@@ -83,10 +83,8 @@ async def run_financial_agent(
     quality = _assess_data_quality(latest)
     config = load_config()
     registry = LLMRegistry(config)
-    model = registry.get_model("financial_data") if not llm_override else None
-
-    narrative = "（LLM 分析待接入 DeepSeek API）" if model is None else await _llm_narrative(
-        model, ticker, company_name, ratios, quality)
+    model = llm_override or registry.get_model("financial_data")
+    narrative = await _llm_narrative(model, ticker, company_name, ratios, quality) if model else "（LLM 暂不可用）"
 
     return {
         "ticker": ticker,

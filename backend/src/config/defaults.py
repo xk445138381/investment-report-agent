@@ -88,7 +88,7 @@ DEFAULT_PIPELINES = {
             "phase_3_debate": {
                 "parallel": False,
                 "agents": ["bull_case", "bear_case", "risk_judge"],
-                "debate_rounds": 2,
+                "debate_rounds": 1,  # LLM calls add latency; keep to 1 round for responsiveness
             },
             "phase_4_assembly": {
                 "parallel": False,

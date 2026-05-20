@@ -1,7 +1,7 @@
 """Bear Case Agent — argues the pessimistic investment thesis."""
 
-import json
-import logging
+import asyncio, json, logging
+from langchain_core.messages import HumanMessage
 
 logger = logging.getLogger(__name__)
 
@@ -20,34 +20,19 @@ BEAR_PROMPT = """你是一位资深看跌分析师。请基于以下数据，为
 
 ## 输出格式（严格 JSON）
 {{
-  "side": "bear",
-  "round": {round_num},
-  "arguments": [
-    {{
-      "id": "bear_arg_1",
-      "thesis": "论点标题",
-      "evidence": ["证据1", "证据2"],
-      "confidence": 85,
-      "rebuttal_to": "bull_arg_X（仅第2轮填写）",
-      "rebuttal_text": "反驳理由（仅第2轮填写）"
-    }}
-  ],
+  "side": "bear", "round": {round_num},
+  "arguments": [{{
+    "id": "bear_arg_1", "thesis": "论点标题", "evidence": ["证据1"],
+    "confidence": 75, "rebuttal_to": "bull_arg_X（仅第2轮填写）",
+    "rebuttal_text": "反驳理由（仅第2轮填写）"
+  }}],
   "key_narrative": "一句话总结看跌逻辑"
 }}"""
 
 
-async def run_bear_agent(
-    ticker: str,
-    company_name: str,
-    financial_analysis: dict,
-    valuation: dict,
-    price_data: dict,
-    debate_history: list = None,
-    round_num: int = 1,
-) -> dict:
-    """Generate bear case arguments."""
-    if debate_history is None:
-        debate_history = []
+async def run_bear_agent(ticker, company_name, financial_analysis, valuation, price_data,
+                         debate_history=None, round_num=1):
+    if debate_history is None: debate_history = []
 
     prompt = BEAR_PROMPT.format(
         company_name=company_name, ticker=ticker,
@@ -58,63 +43,45 @@ async def run_bear_agent(
         round_num=round_num,
     )
 
+    try:
+        from config.loader import load_config, LLMRegistry
+        model = LLMRegistry(load_config()).get_model("bear_case")
+        if model:
+            resp = await asyncio.wait_for(model.ainvoke([HumanMessage(content=prompt)]), timeout=20)
+            text = resp.content.strip()
+            if text.startswith("```"): text = text.split("\n", 1)[1].rsplit("\n```", 1)[0]
+            data = json.loads(text)
+            if data.get("arguments"):
+                logger.info("Bear agent: LLM generated %d arguments", len(data["arguments"]))
+                return data
+    except Exception as e:
+        logger.warning(f"Bear LLM failed, using fallback: {e}")
+
     return await _generate_bear_arguments(company_name, financial_analysis, valuation, price_data, round_num)
 
 
 async def _generate_bear_arguments(company_name, fin, val, price, round_num):
-    """Generate bear arguments from data without LLM (fallback)."""
-    arguments = []
-    idx = 1
+    arguments = []; idx = 1
     ratios = fin.get("ratios", {})
-    price_summary = price.get("price_summary", {})
-    returns = price_summary.get("returns", {})
-
-    # Valuation risk
+    ps = price.get("price_summary", {})
     if val.get("signal") == "overvalued":
-        arguments.append({
-            "id": f"bear_arg_{idx}", "thesis": "当前估值偏高，下行风险显著",
-            "evidence": [f"目标价 {val.get('weighted_value', 0):.2f} 低于现价 {val.get('current_price', 0):.2f}"],
-            "confidence": 80, "rebuttal_to": None, "rebuttal_text": None,
-        })
-        idx += 1
-
-    # Growth slowdown
+        arguments.append({"id": f"bear_arg_{idx}", "thesis": "当前估值偏高，下行风险显著",
+            "evidence": [f"目标价 {val.get('weighted_value',0):.2f} 低于现价 {val.get('current_price',0):.2f}"],
+            "confidence": 80, "rebuttal_to": None, "rebuttal_text": None}); idx += 1
     if ratios.get("revenue_growth_yoy") is not None and ratios["revenue_growth_yoy"] < 0.10:
-        arguments.append({
-            "id": f"bear_arg_{idx}", "thesis": "收入增速放缓，成长性不足",
+        arguments.append({"id": f"bear_arg_{idx}", "thesis": "收入增速放缓，成长性不足",
             "evidence": [f"营收同比增长仅 {ratios['revenue_growth_yoy']*100:.1f}%"],
-            "confidence": 75, "rebuttal_to": None, "rebuttal_text": None,
-        })
-        idx += 1
-
-    # Price trend risk
-    if returns.get("1y") and returns["1y"] < -10:
-        arguments.append({
-            "id": f"bear_arg_{idx}", "thesis": "股价处于下行趋势，短期难反转",
-            "evidence": [f"1年跌幅 {returns['1y']}%"],
-            "confidence": 70, "rebuttal_to": None, "rebuttal_text": None,
-        })
-        idx += 1
-
-    # Debt risk
+            "confidence": 75, "rebuttal_to": None, "rebuttal_text": None}); idx += 1
+    if ps.get("returns", {}).get("1y") is not None and ps["returns"]["1y"] < -10:
+        arguments.append({"id": f"bear_arg_{idx}", "thesis": "股价处于下行趋势",
+            "evidence": [f"1年跌幅 {ps['returns']['1y']}%"],
+            "confidence": 70, "rebuttal_to": None, "rebuttal_text": None}); idx += 1
     if ratios.get("debt_to_equity") is not None and ratios["debt_to_equity"] > 1.0:
-        arguments.append({
-            "id": f"bear_arg_{idx}", "thesis": "高杠杆运营，财务风险上升",
+        arguments.append({"id": f"bear_arg_{idx}", "thesis": "高杠杆运营，财务风险上升",
             "evidence": [f"负债权益比 {ratios['debt_to_equity']:.2f}"],
-            "confidence": 75, "rebuttal_to": None, "rebuttal_text": None,
-        })
-        idx += 1
-
-    # Macro/regulatory risk
-    arguments.append({
-        "id": f"bear_arg_{len(arguments)+1}", "thesis": "宏观经济不确定性与行业监管风险",
+            "confidence": 75, "rebuttal_to": None, "rebuttal_text": None}); idx += 1
+    arguments.append({"id": f"bear_arg_{len(arguments)+1}", "thesis": "宏观经济不确定性与行业监管风险",
         "evidence": ["经济增速放缓", "行业政策变化"],
-        "confidence": 55, "rebuttal_to": None, "rebuttal_text": None,
-    })
-
-    return {
-        "side": "bear",
-        "round": round_num,
-        "arguments": arguments,
-        "key_narrative": f"{company_name} 面临增速放缓、估值压力和外部风险，需谨慎对待",
-    }
+        "confidence": 55, "rebuttal_to": None, "rebuttal_text": None})
+    return {"side": "bear", "round": round_num, "arguments": arguments,
+            "key_narrative": f"{company_name} 面临增速放缓、估值压力和外部风险，需谨慎对待"}
