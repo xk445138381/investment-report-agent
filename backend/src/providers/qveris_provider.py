@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://qveris.ai/api/v1"
 EXECUTE_URL = f"{BASE_URL}/tools/execute"
+SEARCH_URL = f"{BASE_URL}/search"
 
 # Pre-discovered tool IDs
 HISTORY_TOOL = "cn_financial_pro.history_quotation.v1"
@@ -32,6 +33,7 @@ def _market(ticker: str) -> str:
     if ".HK" in ticker.upper(): return "HK"
     return "US"
 
+# Ticker → standardized code
 TICKER_MAP = {
     "600519.SH": "600519.SH", "600519": "600519.SH",
     "000858.SZ": "000858.SZ", "000858": "000858.SZ",
@@ -39,6 +41,15 @@ TICKER_MAP = {
     "000001.SZ": "000001.SZ",
     "AAPL": "AAPL",
     "0700.HK": "0700.HK", "0700": "0700.HK",
+}
+# Ticker → company name (for report titles)
+COMPANY_NAMES = {
+    "600519.SH": "贵州茅台", "600519": "贵州茅台",
+    "000858.SZ": "五粮液", "000858": "五粮液",
+    "300750.SZ": "宁德时代", "300750": "宁德时代",
+    "000001.SZ": "平安银行",
+    "AAPL": "Apple Inc.",
+    "0700.HK": "腾讯控股", "0700": "腾讯控股",
 }
 
 
@@ -59,11 +70,8 @@ class QverisProvider(DataProvider):
             return False
         try:
             async with httpx.AsyncClient(timeout=10, trust_env=False) as c:
-                r = await c.post(
-                    f"{EXECUTE_URL}?tool_id={TICK_TOOL}",
-                    headers=self._headers,
-                    json={"parameters": {"stockObject": ["600519.SH"], "pageSize": 1}},
-                )
+                r = await c.post(SEARCH_URL, headers=self._headers,
+                                 json={"query": "stock", "limit": 1})
                 return r.status_code == 200
         except Exception:
             return False
@@ -78,7 +86,7 @@ class QverisProvider(DataProvider):
             expiry, val = _cache[cache_key]
             if now < expiry:
                 return val
-        result = await self._fetch_prices(ticker, start_date, end_date)
+        result = await self._fetch_prices(ticker, start_date, end_date) or []
         _cache[cache_key] = (now + CACHE_TTL["prices"], result)
         return result
 
@@ -93,14 +101,25 @@ class QverisProvider(DataProvider):
                 })
                 return self._parse_alphavantage_prices(data, ticker, start_date, end_date)
             else:
-                data = await self._call_tool(HISTORY_TOOL, {
-                    "codes": code,
-                    "startdate": start_date.isoformat(),
-                    "enddate": end_date.isoformat(),
-                    "indicators": "stock_common",
-                    "interval": "D",
-                })
-                return self._parse_history_prices(data, ticker)
+                # Request in 1-year chunks to avoid OSS truncation (OSS URLs expire)
+                all_rows = []
+                import asyncio as _asyncio
+                years = list(range(start_date.year, end_date.year + 1))
+                async def fetch_year(y: int):
+                    s = date(y, 1, 1)
+                    e = date(y, 12, 31) if y < end_date.year else end_date
+                    try:
+                        d = await self._call_tool(HISTORY_TOOL, {
+                            "codes": code, "startdate": s.isoformat(), "enddate": e.isoformat(),
+                            "indicators": "stock_common", "interval": "D",
+                        })
+                        return self._parse_history_prices(d, ticker)
+                    except Exception:
+                        return []
+                chunks = await _asyncio.gather(*[fetch_year(y) for y in years])
+                for c in chunks:
+                    all_rows.extend(c or [])
+                return sorted(all_rows, key=lambda x: x["date"])
         except Exception as e:
             logger.warning(f"QVeris prices({ticker}): {e}")
             return []
@@ -112,7 +131,7 @@ class QverisProvider(DataProvider):
             expiry, val = _cache[cache_key]
             if now < expiry:
                 return val
-        result = await self._fetch_financials(ticker, years)
+        result = await self._fetch_financials(ticker, years) or []
         _cache[cache_key] = (now + CACHE_TTL["financials"], result)
         return result
 
@@ -120,6 +139,59 @@ class QverisProvider(DataProvider):
         import asyncio as _asyncio
         if _market(ticker) != "CN":
             return await self._fetch_us_financials(ticker)
+        mapping = TICKER_MAP.get(ticker)
+        if not mapping: return []
+        code = mapping
+        _PERIOD_MAP = {"0331": (3, 31), "0630": (6, 30), "0930": (9, 30), "1231": (12, 31)}
+        current_year = date.today().year
+
+        async def fetch_one(year: int, period: str):
+            try:
+                month, day = _PERIOD_MAP[period]
+                inc = await self._call_tool("cn_financial_pro.income_statement.v1",
+                    {"codes": code, "year": str(year), "period": period, "type": "1"})
+                rows = inc.get("rows", [])
+                if rows:
+                    report_d = date(year, month, day)
+                    for row in rows: row["_report_date"] = report_d
+                    try:
+                        bs = await self._call_tool("cn_financial_pro.balance_sheet.v1",
+                            {"codes": code, "year": str(year), "period": period, "type": "1"})
+                        bs_rows = bs.get("rows", [])
+                        if bs_rows:
+                            for i, row in enumerate(rows):
+                                if i < len(bs_rows):
+                                    row.update({k: v for k, v in bs_rows[i].items()
+                                               if v is not None and k != "_report_date"})
+                    except Exception: pass
+                    try:
+                        cf = await self._call_tool("cn_financial_pro.cash_flow_statement.v1",
+                            {"codes": code, "year": str(year), "period": period, "type": "1"})
+                        cf_rows = cf.get("rows", [])
+                        if cf_rows:
+                            for i, row in enumerate(rows):
+                                if i < len(cf_rows):
+                                    row.update({k: v for k, v in cf_rows[i].items()
+                                               if v is not None and k != "_report_date"})
+                    except Exception: pass
+                    for row in rows:
+                        ocf = row.get("ths_ncf_from_oa_stock")
+                        capex = row.get("ths_cash_paid_for_assets_stock")
+                        if ocf is not None and capex is not None and "ths_free_cash_flow_stock" not in row:
+                            row["ths_free_cash_flow_stock"] = ocf - capex
+                    return rows
+            except Exception: return []
+            return []
+
+        tasks = [fetch_one(year, period)
+                 for year in range(current_year - years, current_year + 1)
+                 for period in _PERIOD_MAP]
+        results = await _asyncio.gather(*tasks, return_exceptions=True)
+        all_rows = []
+        for r in results:
+            if isinstance(r, list): all_rows.extend(r)
+        if not all_rows: return []
+        return self._parse_financial_rows(all_rows, ticker)
 
     async def _fetch_us_financials(self, ticker: str) -> list:
         """Fetch US stock financials via Alpha Vantage (3 parallel calls)."""

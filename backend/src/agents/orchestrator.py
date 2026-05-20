@@ -100,6 +100,14 @@ class Orchestrator:
                 result["company_name"] = name_match.group(1)
                 result["ticker"] = name_match.group(1)
 
+        # Resolve company name from ticker lookup
+        if result["ticker"] and (not result["company_name"] or result["company_name"] == result["ticker"]):
+            try:
+                from providers.qveris_provider import COMPANY_NAMES
+                result["company_name"] = COMPANY_NAMES.get(result["ticker"], result["company_name"])
+            except ImportError:
+                pass
+
         if not result["ticker"] and not result["company_name"]:
             result["error"] = "无法识别公司名称或股票代码，请提供具体的公司名或代码（如 600519.SH 或 贵州茅台）"
 
