@@ -101,24 +101,33 @@ class QverisProvider(DataProvider):
                 })
                 return self._parse_alphavantage_prices(data, ticker, start_date, end_date)
             else:
-                # Request in 1-year chunks to avoid OSS truncation (OSS URLs expire)
-                all_rows = []
+                # Request in 3-month chunks to avoid OSS truncation (OSS URLs expire)
                 import asyncio as _asyncio
-                years = list(range(start_date.year, end_date.year + 1))
-                async def fetch_year(y: int):
-                    s = date(y, 1, 1)
-                    e = date(y, 12, 31) if y < end_date.year else end_date
+                from datetime import timedelta
+                from functools import partial
+
+                async def _fetch_chunk(start_d, end_d):
                     try:
                         d = await self._call_tool(HISTORY_TOOL, {
-                            "codes": code, "startdate": s.isoformat(), "enddate": e.isoformat(),
+                            "codes": code, "startdate": start_d.isoformat(),
+                            "enddate": end_d.isoformat(),
                             "indicators": "stock_common", "interval": "D",
                         })
                         return self._parse_history_prices(d, ticker)
                     except Exception:
                         return []
-                chunks = await _asyncio.gather(*[fetch_year(y) for y in years])
+
+                tasks = []
+                current = start_date
+                while current < end_date:
+                    chunk_end = min(current + timedelta(days=90), end_date)
+                    tasks.append(_fetch_chunk(current, chunk_end))
+                    current = chunk_end + timedelta(days=1)
+
+                chunks = await _asyncio.gather(*tasks)
+                all_rows = []
                 for c in chunks:
-                    all_rows.extend(c or [])
+                    if isinstance(c, list): all_rows.extend(c)
                 return sorted(all_rows, key=lambda x: x["date"])
         except Exception as e:
             logger.warning(f"QVeris prices({ticker}): {e}")
