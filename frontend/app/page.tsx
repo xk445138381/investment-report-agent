@@ -14,7 +14,7 @@ const PIPELINE_PHASES = [
 
 const ALL_AGENTS = PIPELINE_PHASES.flatMap((p) => p.agents);
 
-const SUGGESTIONS = ["贵州茅台", "宁德时代", "腾讯控股", "Apple", "五粮液", "恒瑞医药"];
+const SUGGESTIONS = ["贵州茅台", "宁德时代", "AAPL", "五粮液", "MSFT", "恒瑞医药"];
 
 const DEPTHS: { id: Depth; name: string; time: string; desc: string }[] = [
   { id: "brief", name: "快速简报", time: "约 45s", desc: "精简版：核心财务 + 简要估值 + 关键风险。6 Agent 管线。" },

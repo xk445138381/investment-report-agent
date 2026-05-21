@@ -39,6 +39,8 @@ function ReportContent() {
 const [data, setData] = useState(taskId ? null : MOCK);
 const [newsItems, setNewsItems] = useState<NewsItem[]>(taskId ? [] : MOCK_NEWS);
 const [charts, setCharts] = useState<ChartData[]>([]);
+const [macroData, setMacroData] = useState<Record<string,unknown>|null>(null);
+const [ownership, setOwnership] = useState("");
 const [loading, setLoading] = useState(!!taskId);
 
   useEffect(() => {
@@ -73,6 +75,13 @@ const [loading, setLoading] = useState(!!taskId);
         // Chart data
         const chartsRaw = raw?.chart_generator?.result || [];
         setCharts(Array.isArray(chartsRaw) ? chartsRaw : []);
+        // Macro data
+        setMacroData(raw?.macro_data?.result?.macro || null);
+        // Ownership
+        const govResult = raw?.corporate_governance?.result;
+        if (govResult?.ownership_structure && !govResult.ownership_structure.includes("待补充")) {
+          setOwnership(String(govResult.ownership_structure));
+        }
       } catch {
         setData(MOCK);
         setNewsItems(MOCK_NEWS);
@@ -190,6 +199,47 @@ const [loading, setLoading] = useState(!!taskId);
             ))}
           </div>
           <div className="text-[11px] text-ink-tertiary mt-3.5">股价走势（图表引擎就绪，生成深度研报以渲染）</div>
+        </div>
+      )}
+
+      {/* Macro data */}
+      {macroData && (macroData.gdp_growth_yoy || macroData.cpi_yoy || macroData.analysis) && (
+        <div className="mb-8 p-4 bg-bg-surface border border-border-light">
+          <div className="font-serif text-[15px] font-semibold text-ink-primary mb-3">宏观环境</div>
+          <div className="grid grid-cols-4 gap-3 mb-3">
+            {macroData.gdp_growth_yoy != null && (
+              <div className="text-center p-2">
+                <div className="text-[10px] text-ink-tertiary font-mono">GDP 增速</div>
+                <div className="font-mono text-lg font-bold text-ink-primary">{String(macroData.gdp_growth_yoy)}%</div>
+              </div>
+            )}
+            {macroData.cpi_yoy != null && (
+              <div className="text-center p-2">
+                <div className="text-[10px] text-ink-tertiary font-mono">CPI</div>
+                <div className="font-mono text-lg font-bold text-ink-primary">{String(macroData.cpi_yoy)}%</div>
+              </div>
+            )}
+            {macroData.m2_growth_yoy != null && (
+              <div className="text-center p-2">
+                <div className="text-[10px] text-ink-tertiary font-mono">M2 增速</div>
+                <div className="font-mono text-lg font-bold text-ink-primary">{String(macroData.m2_growth_yoy)}%</div>
+              </div>
+            )}
+            {macroData.pmi != null && (
+              <div className="text-center p-2">
+                <div className="text-[10px] text-ink-tertiary font-mono">PMI</div>
+                <div className="font-mono text-lg font-bold text-ink-primary">{String(macroData.pmi)}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Ownership */}
+      {ownership && (
+        <div className="mb-8 p-4 bg-bg-surface border border-border-light">
+          <div className="font-serif text-[15px] font-semibold text-ink-primary mb-2">股权结构</div>
+          <div className="text-[13px] text-ink-secondary">{ownership}</div>
         </div>
       )}
 
