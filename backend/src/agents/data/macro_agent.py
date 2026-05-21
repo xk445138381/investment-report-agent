@@ -11,29 +11,36 @@ async def run_macro_agent(ticker, company_name, prices=None):
               "macro": {"gdp_growth_yoy": None, "cpi_yoy": None, "pmi": None, "analysis": ""}}
     try:
         from providers.qveris_provider import QverisProvider
+        import json, re
         qv = QverisProvider()
-        data = await qv.get_macro()
-        if isinstance(data, dict):
-            # Caidazi macro returns AI-generated analysis text
-            analysis = data.get("result", data.get("analysis", ""))
-            if not analysis:
-                truncated = data.get("truncated_content", "")
-                if truncated:
-                    import json
+        raw = await qv.get_macro()
+        text = ""
+        if isinstance(raw, dict):
+            # Caidazi returns {"success": true, "result": "analysis text..."} or truncated_content
+            text = str(raw.get("result", raw.get("analysis", "")))
+            if not text or text == "None":
+                tc = raw.get("truncated_content", "")
+                if tc:
                     try:
-                        inner = json.loads(truncated)
-                        analysis = inner.get("result", "") or inner.get("analysis", "")
+                        inner = json.loads(tc)
+                        text = str(inner.get("result", "")) or str(inner.get("analysis", ""))
                     except Exception:
-                        analysis = truncated
-            result["macro"]["analysis"] = str(analysis)[:2000] if analysis else ""
-            # Try to extract GDP/CPI/PMI from text
-            text = str(analysis)
-            import re
-            gdp_m = re.search(r'GDP[^0-9]*?([0-9.]+)\s*%', text)
-            cpi_m = re.search(r'CPI[^0-9]*?([0-9.]+)\s*%', text)
+                        text = tc
+            if not text or text == "None":
+                text = str(raw)
+        result["macro"]["analysis"] = text[:2000] if text and text != "None" else ""
+        if text and text != "None":
+            gdp_m = re.search(r'GDP\D*?([0-9.]+)\s*%', text)
+            cpi_m = re.search(r'CPI\D*?([0-9.]+)\s*%', text)
+            m2_m = re.search(r'M2\D*?([0-9.]+)\s*%', text)
+            pmi_m = re.search(r'PMI\D*?([0-9.]+)', text)
             if gdp_m: result["macro"]["gdp_growth_yoy"] = float(gdp_m.group(1))
             if cpi_m: result["macro"]["cpi_yoy"] = float(cpi_m.group(1))
-            result["note"] = "宏观数据已接入（Caidazi AI 宏观分析）" if analysis else "宏观分析返回空"
+            if m2_m: result["macro"]["m2_growth_yoy"] = float(m2_m.group(1))
+            if pmi_m: result["macro"]["pmi"] = float(pmi_m.group(1))
+            result["note"] = "宏观数据已接入（Caidazi AI 宏观分析）"
+        else:
+            result["note"] = "宏观分析返回空"
     except Exception as e:
         logger.info(f"Macro via QVeris: {e}")
         result["note"] = "宏观数据待接入（Phase 2）"
