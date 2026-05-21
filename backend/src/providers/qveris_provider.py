@@ -20,7 +20,9 @@ SEARCH_URL = f"{BASE_URL}/search"
 # Pre-discovered tool IDs
 HISTORY_TOOL = "cn_financial_pro.history_quotation.v1"
 NEWS_TOOL = "caidazi.news.query.v1.e76b9116"
-MACRO_TOOL = "cn_financial_pro.macro_china.v1"
+MACRO_TOOL = "caidazi.get_macro_analysis.execute.v1.7a43f96e"
+INDUSTRY_TOOL = "caidazi.get_sw_l1_fina_indic.execute.v1.7a43f96e"
+HOLDERS_TOOL = "yahoo_finance.finance_holders.v1"
 
 # Simple in-memory TTL cache to reduce QVeris credit usage
 _cache: dict[str, tuple[float, any]] = {}
@@ -382,6 +384,25 @@ class QverisProvider(DataProvider):
         result = await self._fetch_macro()
         _cache[cache_key] = (now + CACHE_TTL["macro"], result)
         return result
+
+    async def get_industry(self, ticker: str) -> dict:
+        """Fetch 申万 L1 industry financial indicators for comparison."""
+        try:
+            data = await self._call_tool(INDUSTRY_TOOL, {"symbol": ticker})
+            return data if isinstance(data, dict) else {"raw": str(data)}
+        except Exception as e:
+            logger.debug(f"Industry data({ticker}): {e}")
+            return {}
+
+    async def get_holders(self, ticker: str) -> dict:
+        """Fetch institutional ownership data via Yahoo Finance."""
+        try:
+            data = await self._call_tool(HOLDERS_TOOL, {
+                "symbol": ticker, "holder_type": "institutional", "max_results": 5
+            })
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
 
     async def _fetch_macro(self) -> dict:
         try:
