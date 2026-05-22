@@ -373,6 +373,17 @@ class QverisProvider(DataProvider):
                         continue
                     net_income = _float(r, "HOLDER_PROFIT")
                     revenue = _float(r, "OPERATE_INCOME")
+                    # Derive balance sheet from ratios (AkShare only gives ratios, not absolute BS)
+                    roe_pct = (_float(r, "ROE_AVG") or 0) / 100
+                    debt_pct = (_float(r, "DEBT_ASSET_RATIO") or 0) / 100
+                    curr_debt_pct = (_float(r, "CURRENTDEBT_DEBT") or 0) / 100
+                    curr_ratio = _float(r, "CURRENT_RATIO")
+                    bps_val = _float(r, "BPS")
+                    total_equity = net_income / roe_pct if net_income and roe_pct > 0 else None
+                    total_assets = total_equity / (1 - debt_pct) if total_equity and debt_pct < 1 else None
+                    total_liabilities = total_assets - total_equity if total_assets and total_equity else None
+                    current_liabilities = total_liabilities * curr_debt_pct if total_liabilities and curr_debt_pct else None
+                    current_assets = current_liabilities * curr_ratio if current_liabilities and curr_ratio else None
                     results.append({
                         "report_date": rd, "fiscal_year": rd.year,
                         "fiscal_quarter": 4, "currency": "HKD",
@@ -381,11 +392,11 @@ class QverisProvider(DataProvider):
                         "net_income": net_income,
                         "eps_basic": _float(r, "BASIC_EPS"),
                         "eps_diluted": _float(r, "DILUTED_EPS"),
-                        "total_assets": None,
-                        "total_liabilities": None,
-                        "total_equity": None,
-                        "current_assets": None, "current_liabilities": None,
-                        "cash_and_equivalents": None,
+                        "total_assets": total_assets,
+                        "total_liabilities": total_liabilities,
+                        "total_equity": total_equity,
+                        "current_assets": current_assets, "current_liabilities": current_liabilities,
+                        "cash_and_equivalents": None,  # Not available in ratio data
                         "operating_cash_flow": _float(r, "PER_NETCASH_OPERATE"),
                         "capex": None, "free_cash_flow": None,
                         # Extra fields for analysis
@@ -394,10 +405,11 @@ class QverisProvider(DataProvider):
                         "_gross_margin": _float(r, "GROSS_PROFIT_RATIO"),
                         "_net_margin": _float(r, "NET_PROFIT_RATIO"),
                         "_debt_ratio": _float(r, "DEBT_ASSET_RATIO"),
-                        "_current_ratio": _float(r, "CURRENT_RATIO"),
+                        "_current_ratio": curr_ratio,
                         "_ocf_sales": _float(r, "OCF_SALES"),
                         "_revenue_yoy": _float(r, "OPERATE_INCOME_YOY"),
                         "_profit_yoy": _float(r, "HOLDER_PROFIT_YOY"),
+                        "_derived_bs": True,  # flag: balance sheet derived from ratios
                     })
                 except Exception:
                     continue
