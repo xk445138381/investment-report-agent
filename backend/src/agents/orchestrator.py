@@ -77,8 +77,8 @@ class Orchestrator:
         elif any(w in user_message for w in ["简报", "快报", "速览", "brief", "快速"]):
             result["pipeline_type"] = "brief"
 
-        # Extract ticker pattern: 600519.SH, 000858.SZ, 0700.HK
-        ticker_match = re.search(r'(\d{6}\.(?:SH|SZ|HK))', user_message)
+        # Extract ticker pattern: 600519.SH, 000858.SZ, 0700.HK (HK: 1-5 digits)
+        ticker_match = re.search(r'(\d{1,6}\.(?:SH|SZ|HK))', user_message)
         if ticker_match:
             result["ticker"] = ticker_match.group(1)
             result["company_name"] = ticker_match.group(1)

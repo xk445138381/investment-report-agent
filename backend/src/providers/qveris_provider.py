@@ -19,6 +19,7 @@ SEARCH_URL = f"{BASE_URL}/search"
 
 # Pre-discovered tool IDs
 HISTORY_TOOL = "cn_financial_pro.history_quotation.v1"
+HK_LIVE_TOOL = "hangseng_polysource.quote.hkshares.live.v2.dec427af"
 NEWS_TOOL = "caidazi.news.query.v1.e76b9116"
 MACRO_TOOL = "caidazi.get_macro_analysis.execute.v1.7a43f96e"
 INDUSTRY_TOOL = "caidazi.get_sw_l1_fina_indic.execute.v1.7a43f96e"
@@ -32,7 +33,7 @@ FINANCIALS_TOOL = "cn_financial_pro.financial_statements.v1"
 
 def _market(ticker: str) -> str:
     if ".SH" in ticker.upper() or ".SZ" in ticker.upper(): return "CN"
-    if ".HK" in ticker.upper(): return "HK"
+    if ".HK" in ticker.upper() or ticker.startswith("0"): return "HK"
     return "US"
 
 # Ticker → standardized code
@@ -42,7 +43,7 @@ TICKER_MAP = {
     "300750.SZ": "300750.SZ", "300750": "300750.SZ",
     "000001.SZ": "000001.SZ",
     "AAPL": "AAPL",
-    "0700.HK": "0700.HK", "0700": "0700.HK",
+    "0700.HK": "00700", "0700": "00700", "00700": "00700",
 }
 # Ticker → company name (for report titles)
 COMPANY_NAMES = {
@@ -51,7 +52,7 @@ COMPANY_NAMES = {
     "300750.SZ": "宁德时代", "300750": "宁德时代",
     "000001.SZ": "平安银行",
     "AAPL": "Apple Inc.",
-    "0700.HK": "腾讯控股", "0700": "腾讯控股",
+    "0700.HK": "腾讯控股", "0700": "腾讯控股", "00700": "腾讯控股",
 }
 
 
@@ -97,11 +98,16 @@ class QverisProvider(DataProvider):
         market = _market(ticker)
         try:
             if market == "US":
-                # Use Alpha Vantage for US stocks
                 data = await self._call_tool("alphavantage.time_series.daily.v1", {
                     "symbol": code, "function": "TIME_SERIES_DAILY",
                 })
                 return self._parse_alphavantage_prices(data, ticker, start_date, end_date)
+            elif market == "HK":
+                # HK only has live quote (no history); return current snapshot
+                data = await self._call_tool(HK_LIVE_TOOL, {
+                    "stockObject": [code.replace(".HK", "")], "pageNo": 1, "pageSize": 1,
+                })
+                return self._parse_hk_live(data, ticker)
             else:
                 # Request in 3-month chunks to avoid OSS truncation (OSS URLs expire)
                 import asyncio as _asyncio
@@ -536,6 +542,29 @@ class QverisProvider(DataProvider):
                 continue
         logger.info(f"Parsed {len(results)} US daily prices for {ticker}")
         return sorted(results, key=lambda x: x["date"])
+
+    def _parse_hk_live(self, data: dict, ticker: str) -> list:
+        """Parse HK live quote into a single PriceData dict."""
+        rows = data.get("data", {}).get("data", {}).get("rows", [])
+        if not rows and isinstance(data, dict):
+            inner = data.get("data", {})
+            if isinstance(inner, dict):
+                rows = inner.get("data", {}).get("rows", [])
+        if not rows:
+            return []
+        r = rows[0]
+        today = date.today()
+        try:
+            return [{
+                "date": today,
+                "open": float(r.get("openPrice", 0) or 0),
+                "high": float(r.get("highPrice", 0) or 0),
+                "low": float(r.get("lowPrice", 0) or 0),
+                "close": float(r.get("latestPrice", 0) or 0),
+                "volume": int(float(r.get("turnoverVolumeLot", 0) or 0)),
+            }]
+        except (ValueError, TypeError):
+            return []
 
     def _parse_ticks_to_daily(self, data: dict, ticker: str,
                               start_date: date, end_date: date) -> list:
