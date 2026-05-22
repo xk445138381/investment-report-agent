@@ -65,6 +65,18 @@ HK_NAME_MAP = {
     "03690": "美团-W", "3690": "美团-W", "3690.HK": "美团-W",
     "01810": "小米集团-W", "1810": "小米集团-W", "1810.HK": "小米集团-W",
     "02318": "中国平安", "2318": "中国平安", "2318.HK": "中国平安",
+    "00941": "中国移动", "0941": "中国移动", "0941.HK": "中国移动",
+    "03968": "招商银行", "3968": "招商银行", "3968.HK": "招商银行",
+    "01211": "比亚迪股份", "1211": "比亚迪股份", "1211.HK": "比亚迪股份",
+    "02269": "药明生物", "2269": "药明生物", "2269.HK": "药明生物",
+    "02020": "安踏体育", "2020": "安踏体育", "2020.HK": "安踏体育",
+    "09618": "京东集团-SW", "9618": "京东集团-SW", "9618.HK": "京东集团-SW",
+    "09999": "网易-S", "9999": "网易-S", "9999.HK": "网易-S",
+    "00027": "银河娱乐", "0027": "银河娱乐", "0027.HK": "银河娱乐",
+    "00175": "吉利汽车", "0175": "吉利汽车", "0175.HK": "吉利汽车",
+    "02382": "舜宇光学科技", "2382": "舜宇光学科技", "2382.HK": "舜宇光学科技",
+    "00016": "新鸿基地产", "0016": "新鸿基地产", "0016.HK": "新鸿基地产",
+    "00011": "恒生银行", "0011": "恒生银行", "0011.HK": "恒生银行",
 }
 
 
@@ -384,11 +396,17 @@ class QverisProvider(DataProvider):
                     total_liabilities = total_assets - total_equity if total_assets and total_equity else None
                     current_liabilities = total_liabilities * curr_debt_pct if total_liabilities and curr_debt_pct else None
                     current_assets = current_liabilities * curr_ratio if current_liabilities and curr_ratio else None
+                    # AkShare provides per-share values; derive absolutes from ratios
+                    tax_rate = (_float(r, "TAX_EBT") or 15) / 100
+                    gross_profit = _float(r, "GROSS_PROFIT")
+                    ocf_sales_ratio = (_float(r, "OCF_SALES") or 0) / 100
+                    operating_income = net_income / (1 - tax_rate) if net_income and tax_rate < 1 else gross_profit
+                    operating_cash_flow = revenue * ocf_sales_ratio if revenue and ocf_sales_ratio else None
                     results.append({
                         "report_date": rd, "fiscal_year": rd.year,
                         "fiscal_quarter": 4, "currency": "HKD",
                         "revenue": revenue,
-                        "operating_income": _float(r, "PER_OI"),
+                        "operating_income": operating_income,
                         "net_income": net_income,
                         "eps_basic": _float(r, "BASIC_EPS"),
                         "eps_diluted": _float(r, "DILUTED_EPS"),
@@ -397,7 +415,7 @@ class QverisProvider(DataProvider):
                         "total_equity": total_equity,
                         "current_assets": current_assets, "current_liabilities": current_liabilities,
                         "cash_and_equivalents": None,  # Not available in ratio data
-                        "operating_cash_flow": _float(r, "PER_NETCASH_OPERATE"),
+                        "operating_cash_flow": operating_cash_flow,
                         "capex": None, "free_cash_flow": None,
                         # Extra fields for analysis
                         "_roe": _float(r, "ROE_AVG"),
@@ -414,6 +432,7 @@ class QverisProvider(DataProvider):
                 except Exception:
                     continue
             logger.info(f"HK financials({ticker}): {len(results)} annual reports via AkShare")
+            results.sort(key=lambda x: x["report_date"])  # ascending = oldest first
             return results
         except Exception as e:
             logger.warning(f"HK financials({ticker}): AkShare failed: {e}")
