@@ -230,7 +230,10 @@ class QverisProvider(DataProvider):
 
     async def _fetch_financials(self, ticker: str, years: int = 5) -> list:
         import asyncio as _asyncio
-        if _market(ticker) != "CN":
+        market = _market(ticker)
+        if market == "HK":
+            return await self._fetch_hk_financials(ticker, years)
+        if market != "CN":
             return await self._fetch_us_financials(ticker)
         mapping = TICKER_MAP.get(ticker)
         if not mapping: return []
@@ -344,78 +347,65 @@ class QverisProvider(DataProvider):
             except Exception: continue
         logger.info(f"US financials({ticker}): {len(results)} annual reports")
         return results
-        mapping = TICKER_MAP.get(ticker)
-        if not mapping:
+
+    async def _fetch_hk_financials(self, ticker: str, years: int = 5) -> list:
+        """Fetch HK financials via AkShare stock_financial_hk_analysis_indicator_em."""
+        code = TICKER_MAP.get(ticker, ticker).replace(".HK", "")
+        try:
+            import akshare as ak
+            df = ak.stock_financial_hk_analysis_indicator_em(symbol=code)
+            if df is None or df.empty:
+                logger.warning(f"HK financials({ticker}): AkShare returned empty")
+                return []
+            # Filter to recent years, keep annual reports only (DATE_TYPE_CODE=001)
+            df_annual = df[df["DATE_TYPE_CODE"] == "001"].copy()
+            if df_annual.empty:
+                # Fallback to all rows if no annual filter
+                df_annual = df
+            results = []
+            for _, r in df_annual.iterrows():
+                try:
+                    d_str = str(r.get("REPORT_DATE", ""))
+                    if not d_str or d_str == "None":
+                        continue
+                    rd = date.fromisoformat(d_str[:10])
+                    if rd.year < date.today().year - years:
+                        continue
+                    net_income = _float(r, "HOLDER_PROFIT")
+                    revenue = _float(r, "OPERATE_INCOME")
+                    results.append({
+                        "report_date": rd, "fiscal_year": rd.year,
+                        "fiscal_quarter": 4, "currency": "HKD",
+                        "revenue": revenue,
+                        "operating_income": _float(r, "PER_OI"),
+                        "net_income": net_income,
+                        "eps_basic": _float(r, "BASIC_EPS"),
+                        "eps_diluted": _float(r, "DILUTED_EPS"),
+                        "total_assets": None,
+                        "total_liabilities": None,
+                        "total_equity": None,
+                        "current_assets": None, "current_liabilities": None,
+                        "cash_and_equivalents": None,
+                        "operating_cash_flow": _float(r, "PER_NETCASH_OPERATE"),
+                        "capex": None, "free_cash_flow": None,
+                        # Extra fields for analysis
+                        "_roe": _float(r, "ROE_AVG"),
+                        "_roa": _float(r, "ROA"),
+                        "_gross_margin": _float(r, "GROSS_PROFIT_RATIO"),
+                        "_net_margin": _float(r, "NET_PROFIT_RATIO"),
+                        "_debt_ratio": _float(r, "DEBT_ASSET_RATIO"),
+                        "_current_ratio": _float(r, "CURRENT_RATIO"),
+                        "_ocf_sales": _float(r, "OCF_SALES"),
+                        "_revenue_yoy": _float(r, "OPERATE_INCOME_YOY"),
+                        "_profit_yoy": _float(r, "HOLDER_PROFIT_YOY"),
+                    })
+                except Exception:
+                    continue
+            logger.info(f"HK financials({ticker}): {len(results)} annual reports via AkShare")
+            return results
+        except Exception as e:
+            logger.warning(f"HK financials({ticker}): AkShare failed: {e}")
             return []
-        code = mapping
-
-        _PERIOD_MAP = {"0331": (3, 31), "0630": (6, 30), "0930": (9, 30), "1231": (12, 31)}
-        current_year = date.today().year
-
-        async def fetch_one(year: int, period: str):
-            """Fetch income + balance sheet for one quarter."""
-            try:
-                month, day = _PERIOD_MAP[period]
-                inc = await self._call_tool("cn_financial_pro.income_statement.v1", {
-                    "codes": code, "year": str(year), "period": period, "type": "1",
-                })
-                rows = inc.get("rows", [])
-                if rows:
-                    report_d = date(year, month, day)
-                    for row in rows:
-                        row["_report_date"] = report_d
-
-                    try:
-                        bs = await self._call_tool("cn_financial_pro.balance_sheet.v1", {
-                            "codes": code, "year": str(year), "period": period, "type": "1",
-                        })
-                        bs_rows = bs.get("rows", [])
-                        if bs_rows:
-                            for i, row in enumerate(rows):
-                                if i < len(bs_rows):
-                                    row.update({k: v for k, v in bs_rows[i].items()
-                                               if v is not None and k != "_report_date"})
-                    except Exception:
-                        pass
-                    # Merge cash flow statement
-                    try:
-                        cf = await self._call_tool("cn_financial_pro.cash_flow_statement.v1", {
-                            "codes": code, "year": str(year), "period": period, "type": "1",
-                        })
-                        cf_rows = cf.get("rows", [])
-                        if cf_rows:
-                            for i, row in enumerate(rows):
-                                if i < len(cf_rows):
-                                    row.update({k: v for k, v in cf_rows[i].items()
-                                               if v is not None and k != "_report_date"})
-                    except Exception:
-                        pass
-                    # Compute FCF if not provided: FCF = OCF - Capex
-                    for row in rows:
-                        ocf = row.get("ths_ncf_from_oa_stock")
-                        capex = row.get("ths_cash_paid_for_assets_stock")
-                        if ocf is not None and capex is not None and "ths_free_cash_flow_stock" not in row:
-                            row["ths_free_cash_flow_stock"] = ocf - capex
-                    return rows
-            except Exception:
-                pass
-            return []
-
-        # Fire all queries in parallel
-        tasks = []
-        for year in range(current_year - years, current_year + 1):
-            for period in _PERIOD_MAP:
-                tasks.append(fetch_one(year, period))
-
-        results = await _asyncio.gather(*tasks, return_exceptions=True)
-        all_rows = []
-        for r in results:
-            if isinstance(r, list):
-                all_rows.extend(r)
-
-        if not all_rows:
-            return []
-        return self._parse_financial_rows(all_rows, ticker)
 
     async def get_news(self, ticker: str, days: int = 30) -> list:
         cache_key = f"news:{ticker}:{days}"
@@ -751,6 +741,17 @@ class QverisProvider(DataProvider):
 
         logger.info(f"Parsed {len(results)} financial statements for {ticker}")
         return results
+
+
+def _float(row, key: str):
+    """Safely extract float from a DataFrame row by key."""
+    try:
+        v = row.get(key)
+        if v is None or (isinstance(v, float) and v != v):  # NaN check
+            return None
+        return float(v)
+    except (ValueError, TypeError):
+        return None
 
 
 def _partial_parse(text: str) -> dict:
