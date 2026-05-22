@@ -20,6 +20,7 @@ SEARCH_URL = f"{BASE_URL}/search"
 # Pre-discovered tool IDs
 HISTORY_TOOL = "cn_financial_pro.history_quotation.v1"
 HK_LIVE_TOOL = "hangseng_polysource.quote.hkshares.live.v2.dec427af"
+HK_DAILY_TOOL = "hangseng_polysource.hk_stock.daily.quote.create.v2.dd094924"
 NEWS_TOOL = "caidazi.news.query.v1.e76b9116"
 MACRO_TOOL = "caidazi.get_macro_analysis.execute.v1.7a43f96e"
 INDUSTRY_TOOL = "caidazi.get_sw_l1_fina_indic.execute.v1.7a43f96e"
@@ -53,6 +54,17 @@ COMPANY_NAMES = {
     "000001.SZ": "平安银行",
     "AAPL": "Apple Inc.",
     "0700.HK": "腾讯控股", "0700": "腾讯控股", "00700": "腾讯控股",
+}
+# HK ticker → Chinese company name (required by hangseng_polysource daily tool)
+HK_NAME_MAP = {
+    "00700": "腾讯控股", "0700": "腾讯控股", "0700.HK": "腾讯控股",
+    "09988": "阿里巴巴-SW", "9988": "阿里巴巴-SW", "9988.HK": "阿里巴巴-SW",
+    "00388": "香港交易所", "0388": "香港交易所", "0388.HK": "香港交易所",
+    "01299": "友邦保险", "1299": "友邦保险", "1299.HK": "友邦保险",
+    "00005": "汇丰控股", "0005": "汇丰控股", "0005.HK": "汇丰控股",
+    "03690": "美团-W", "3690": "美团-W", "3690.HK": "美团-W",
+    "01810": "小米集团-W", "1810": "小米集团-W", "1810.HK": "小米集团-W",
+    "02318": "中国平安", "2318": "中国平安", "2318.HK": "中国平安",
 }
 
 
@@ -103,7 +115,11 @@ class QverisProvider(DataProvider):
                 })
                 return self._parse_alphavantage_prices(data, ticker, start_date, end_date)
             elif market == "HK":
-                # HK only has live quote (no history); return current snapshot
+                # Try daily history first, fall back to live quote
+                data = await self._fetch_hk_daily(ticker, start_date, end_date)
+                if data:
+                    return data
+                # Fallback: live quote as single-day snapshot
                 data = await self._call_tool(HK_LIVE_TOOL, {
                     "stockObject": [code.replace(".HK", "")], "pageNo": 1, "pageSize": 1,
                 })
@@ -140,6 +156,66 @@ class QverisProvider(DataProvider):
         except Exception as e:
             logger.warning(f"QVeris prices({ticker}): {e}")
             return []
+
+    async def _fetch_hk_daily(self, ticker: str, start_date: date, end_date: date) -> list:
+        """Fetch HK daily OHLCV history via hangseng_polysource daily quote tool."""
+        code = TICKER_MAP.get(ticker, ticker).replace(".HK", "")
+        # The tool requires Chinese company names, not stock codes
+        hk_name = HK_NAME_MAP.get(code, HK_NAME_MAP.get(ticker, ""))
+        stock_obj = hk_name if hk_name else code
+        try:
+            data = await self._call_tool(HK_DAILY_TOOL, {
+                "stockObject": [stock_obj],
+                "beginDate": start_date.isoformat(),
+                "endDate": end_date.isoformat(),
+            })
+            return self._parse_hk_daily(data, ticker)
+        except Exception as e:
+            logger.warning(f"HK daily({ticker}): {e}, trying live quote fallback")
+            return []
+
+    def _parse_hk_daily(self, data: dict, ticker: str) -> list:
+        """Parse hangseng_polysource daily quote rows into standard OHLCV dicts."""
+        rows = data.get("data", {}).get("data", {}).get("rows", [])
+        if not rows and isinstance(data, dict):
+            # Try deeper nesting paths
+            for path in [
+                ["data", "data", "data", "rows"],
+                ["data", "rows"],
+                ["rows"],
+            ]:
+                d = data
+                for key in path:
+                    d = d.get(key, {}) if isinstance(d, dict) else {}
+                if isinstance(d, list) and d:
+                    rows = d
+                    break
+        if not rows:
+            return []
+
+        results = []
+        for r in rows:
+            try:
+                d_str = str(r.get("tradingday", ""))
+                if not d_str or d_str == "None":
+                    continue
+                d = date.fromisoformat(d_str[:10])
+                c = float(r.get("close", 0) or 0)
+                if c <= 0:
+                    continue
+                results.append({
+                    "date": d,
+                    "open": float(r.get("open", c) or c),
+                    "high": float(r.get("high", c) or c),
+                    "low": float(r.get("low", c) or c),
+                    "close": c,
+                    "volume": int(float(r.get("volume", 0) or 0)),
+                })
+            except (ValueError, TypeError):
+                continue
+
+        logger.info(f"Parsed {len(results)} HK daily prices for {ticker}")
+        return sorted(results, key=lambda x: x["date"])
 
     async def get_financials(self, ticker: str, years: int = 5) -> list:
         cache_key = f"financials:{ticker}:{years}"
