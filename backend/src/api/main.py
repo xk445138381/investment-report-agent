@@ -10,9 +10,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import orjson
 
-# Load .env from backend root (parent of src/api/)
+# Load .env from backend root (parent of src/api/), strip CRLF on Windows
 _ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(_ENV_PATH)
+# Ensure no \r contamination from Windows CRLF
+for key in list(os.environ.keys()):
+    val = os.environ[key]
+    if isinstance(val, str) and '\r' in val:
+        os.environ[key] = val.replace('\r', '')
 logger = logging.getLogger(__name__)
 logger.info(f"Loaded .env from {_ENV_PATH} (DEEPSEEK_KEY={'set' if os.getenv('DEEPSEEK_API_KEY') else 'MISSING'})")
 
