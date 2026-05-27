@@ -1,9 +1,29 @@
 """Charlie Munger Perspective Agent — 芒格式逆向思维评估."""
 
-import logging, random, asyncio, json
-from langchain_core.messages import HumanMessage
+import logging, random, asyncio, json, os, requests
 
 logger = logging.getLogger(__name__)
+
+
+def _call_deepseek_sync(base_url: str, api_key: str, model: str, prompt: str, timeout: int) -> str | None:
+    """Synchronous DeepSeek API call using requests (avoids httpx async issues)."""
+    try:
+        r = requests.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": model, "messages": [{"role": "user", "content": prompt}],
+                  "temperature": 0.4, "max_tokens": 4000},
+            timeout=timeout,
+        )
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"]
+        logger.warning(f"DeepSeek HTTP {r.status_code}: {r.text[:200]}")
+        return None
+    except requests.Timeout:
+        raise
+    except Exception as e:
+        logger.warning(f"DeepSeek sync error: {e}")
+        return None
 
 
 async def run_munger_agent(ticker, company_name, financial_analysis=None, valuation=None,
@@ -23,28 +43,32 @@ async def run_munger_agent(ticker, company_name, financial_analysis=None, valuat
     }
 
     try:
-        from config.loader import load_config, LLMRegistry
+        from config.loader import load_config
         config = load_config()
-        registry = LLMRegistry(config)
-        model = registry.get_model("munger_case")
         agent_cfg = config.agents.get("munger_case", {})
         timeout = agent_cfg.get("timeout_seconds", 300)
+        provider_id = agent_cfg.llm if agent_cfg else "provider_quick"
+        provider_cfg = config.llm_providers.get(provider_id, config.llm_providers.get("provider_quick"))
     except Exception:
         return _munger_fallback(ticker, company_name, ctx)
 
     prompt = _build_munger_prompt(ctx)
+    api_key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
+    base_url = provider_cfg.base_url or "https://api.deepseek.com/v1"
+
     for attempt in range(3):
         try:
-            loop = asyncio.get_event_loop()
-            response = await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: model.invoke([HumanMessage(content=prompt)])),
-                timeout=timeout // 3
+            text = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None, lambda: _call_deepseek_sync(base_url, api_key, provider_cfg.model, prompt, 60)
+                ),
+                timeout=timeout // 2
             )
-            text = response.content if hasattr(response, "content") else str(response)
-            return _parse_munger_response(text, ticker, company_name)
+            if text:
+                return _parse_munger_response(text, ticker, company_name)
         except asyncio.TimeoutError:
-            logger.warning(f"Munger agent({ticker}): LLM timeout attempt {attempt+1}/3, retrying...")
-            await asyncio.sleep(3)
+            logger.warning(f"Munger agent({ticker}): LLM timeout attempt {attempt+1}/3")
+            await asyncio.sleep(2)
         except Exception as e:
             logger.warning(f"Munger agent({ticker}): LLM error attempt {attempt+1}/3: {e}")
             await asyncio.sleep(2)
