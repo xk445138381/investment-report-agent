@@ -15,6 +15,7 @@ const MOCK: Data = {
   val: { weighted_value: 2440, weighted_upside_pct: 83.1, signal: "undervalued" },
   verdict: "STRONG_BUY", verdict_conf: 80,
   current_price: 1332.95,
+  isValueTemplate: false,
   sections: {
     executive_summary: { title: "投资摘要", content: "600519.SH 当前股价 1332.95 元，加权目标价 2439.98 元，上行空间 83.1%。财务健康度 EXCELLENT（30.2/32分）。综合评级：STRONG_BUY。" },
     financial_analysis: { title: "财务分析", content: "ROE: 24.3% | 负债权益比: 0.15" },
@@ -54,9 +55,11 @@ const [loading, setLoading] = useState(!!taskId);
         const sw = raw?.section_writer?.result;
         const fa = raw?.financial_analysis?.result;
         const val = raw?.valuation?.result;
-        const judge = raw?.risk_judge?.result;
+        const judge = raw?.value_judge?.result || raw?.risk_judge?.result;
         const price = raw?.price_data?.result?.price_summary || {};
         const newsRaw = raw?.news_data?.result?.recent_events || [];
+        const sections = sw?.sections || {};
+        const isValueTemplate = !!raw?.value_judge;
 
         setData({
           score: fa?.financial_health_score || {},
@@ -64,7 +67,8 @@ const [loading, setLoading] = useState(!!taskId);
           verdict: judge?.verdict || "HOLD",
           verdict_conf: judge?.verdict_confidence || 50,
           current_price: price?.latest_price || val?.current_price || 0,
-          sections: sw?.sections || {},
+          sections,
+          isValueTemplate,
         });
         setNewsItems(newsRaw.map((e: Record<string, unknown>) => ({
           title: String(e.title || ""),
@@ -99,28 +103,41 @@ const [loading, setLoading] = useState(!!taskId);
 
   if (!data) return null;
 
-  const { score, val, verdict, current_price, sections } = data;
+  const { score, val, verdict, current_price, sections, isValueTemplate } = data;
   const showNews = newsItems.length > 0;
-  const verdictLabel: Record<string, string> = { STRONG_BUY: "买入", BUY: "买入", HOLD: "持有", SELL: "卖出", STRONG_SELL: "卖出" };
+  const verdictLabel: Record<string, string> = {
+    STRONG_BUY: "买入", BUY: "买入", HOLD: "持有", SELL: "卖出", STRONG_SELL: "卖出",
+    Yes: "可买", No: "不买", "Too Hard": "太难",
+  };
+  const verdictDisplay = verdictLabel[verdict] || verdict;
+  const verdictClass = verdict === "Yes" || verdict === "STRONG_BUY" ? "text-accent" :
+    verdict === "No" || verdict === "STRONG_SELL" ? "text-accent" : "text-ink-primary";
 
   return (
     <div className="max-w-[720px] mx-auto px-8 py-16">
       {/* Cover */}
       <div className="text-center py-12 border-b border-border-light mb-9">
-        <div className="font-mono text-[10px] text-ink-tertiary tracking-[0.12em] mb-3.5">DEEP DIVE REPORT</div>
+        <div className="font-mono text-[10px] text-ink-tertiary tracking-[0.12em] mb-3.5">
+          {isValueTemplate ? "VALUE INVESTING REPORT" : "DEEP DIVE REPORT"}
+        </div>
         <h1 className="font-serif text-[28px] font-bold text-ink-primary tracking-[0.04em] leading-tight">{ticker}</h1>
-        <p className="font-serif text-base text-ink-secondary mt-2">综合评级：{verdictLabel[verdict] || verdict}</p>
-        <p className="font-mono text-[11px] text-ink-tertiary mt-4">{new Date().toISOString().slice(0, 10)} · 深度研究报告</p>
+        <p className="font-serif text-base text-ink-secondary mt-2">综合判定：<span className={verdictClass}>{verdictDisplay}</span></p>
+        <p className="font-mono text-[11px] text-ink-tertiary mt-4">{new Date().toISOString().slice(0, 10)} · {isValueTemplate ? "段永平×芒格 双重视角" : "深度研究报告"}</p>
       </div>
 
-      {/* Rating cards */}
+      {/* Rating cards - value template shows different labels */}
       <div className="grid grid-cols-4 gap-2.5 mb-8">
-        {[
+        {(isValueTemplate ? [
+          { l: "财务底子", v: score.rating || "N/A", c: score.rating === "EXCELLENT" ? "text-data-positive" : "text-ink-primary" },
+          { l: "估值空间", v: val.signal === "undervalued" ? "安全边际" : val.signal === "overvalued" ? "偏贵" : "合理", c: val.signal === "undervalued" ? "text-accent" : "text-ink-secondary" },
+          { l: "商业模式", v: (val as Data).weighted_upside_pct > 0 ? "清晰" : "需观察", c: "text-ink-primary" },
+          { l: "风险水平", v: verdict === "Too Hard" ? "复杂" : "可控", c: verdict === "Too Hard" ? "text-ink-tertiary" : "text-ink-secondary" },
+        ] : [
           { l: "财务健康", v: score.rating || "N/A", c: score.rating === "EXCELLENT" ? "text-data-positive" : "text-ink-primary" },
           { l: "估值水平", v: val.signal === "undervalued" ? "低估" : val.signal === "overvalued" ? "高估" : "合理", c: val.signal === "undervalued" ? "text-accent" : "text-ink-secondary" },
           { l: "成长前景", v: "稳健", c: "text-ink-primary" },
           { l: "风险等级", v: "中等", c: "text-ink-secondary" },
-        ].map((r) => (
+        ]).map((r) => (
           <div key={r.l} className="p-4 text-center bg-bg-surface border border-border-light">
             <div className="text-[10px] text-ink-tertiary font-mono tracking-[0.06em] mb-1">{r.l}</div>
             <div className={`font-serif text-[22px] font-semibold ${r.c}`}>{r.v}</div>
