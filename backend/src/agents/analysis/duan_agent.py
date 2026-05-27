@@ -27,13 +27,12 @@ async def run_duan_agent(ticker, company_name, financial_analysis=None, valuatio
 
     # Try LLM
     try:
-        from config.llm_registry import get_registry
-        registry = get_registry()
+        from config.loader import load_config, LLMRegistry
+        config = load_config()
+        registry = LLMRegistry(config)
         model = registry.get_model("duan_case")
-        from config.loader import load_config
-        cfg = load_config()
-        agent_cfg = cfg.agents.get("duan_case", {})
-        timeout = agent_cfg.get("timeout_seconds", 120)
+        agent_cfg = config.agents.get("duan_case", {})
+        timeout = agent_cfg.get("timeout_seconds", 300)
     except Exception:
         logger.info("Duan agent: LLM registry unavailable, using fallback")
         return _duan_fallback(ticker, company_name, ctx)

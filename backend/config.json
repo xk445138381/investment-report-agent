@@ -133,9 +133,9 @@
     "bull_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 25},
     "bear_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 25},
     "risk_judge": {"llm": "provider_deep", "output_schema": "RiskJudgeResult", "timeout_seconds": 25},
-    "duan_case": {"llm": "provider_heavy", "fallback_llm": "provider_deep", "output_schema": "ValuePerspectiveResult", "timeout_seconds": 120, "note": "段永平视角：商业模式+本分+现金流确定性"},
-    "munger_case": {"llm": "provider_heavy", "fallback_llm": "provider_deep", "output_schema": "ValuePerspectiveResult", "timeout_seconds": 120, "note": "芒格视角：逆向+Lollapalooza+激励诊断"},
-    "value_judge": {"llm": "provider_heavy", "fallback_llm": "provider_deep", "output_schema": "ValueJudgeResult", "timeout_seconds": 120, "note": "双视角裁决：共识/分歧/Yes-No-Too Hard"},
+    "duan_case": {"llm": "provider_deep", "output_schema": "ValuePerspectiveResult", "timeout_seconds": 300, "note": "段永平视角：商业模式+本分+现金流确定性"},
+    "munger_case": {"llm": "provider_deep", "output_schema": "ValuePerspectiveResult", "timeout_seconds": 300, "note": "芒格视角：逆向+Lollapalooza+激励诊断"},
+    "value_judge": {"llm": "provider_deep", "output_schema": "ValueJudgeResult", "timeout_seconds": 300, "note": "双视角裁决：共识/分歧/Yes-No-Too Hard"},
     "section_writer": {"llm": "provider_deep", "output_schema": "ReportSections", "timeout_seconds": 300},
     "chart_generator": {"llm": "provider_quick", "output_schema": "ChartOutputs", "timeout_seconds": 60},
     "title_summary": {"llm": "provider_quick", "output_schema": "ReportMetadata", "timeout_seconds": 30}

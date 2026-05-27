@@ -25,13 +25,12 @@ async def run_value_judge(ticker, company_name, duan_result=None, munger_result=
     }
 
     try:
-        from config.llm_registry import get_registry
-        registry = get_registry()
+        from config.loader import load_config, LLMRegistry
+        config = load_config()
+        registry = LLMRegistry(config)
         model = registry.get_model("value_judge")
-        from config.loader import load_config
-        cfg = load_config()
-        agent_cfg = cfg.agents.get("value_judge", {})
-        timeout = agent_cfg.get("timeout_seconds", 120)
+        agent_cfg = config.agents.get("value_judge", {})
+        timeout = agent_cfg.get("timeout_seconds", 300)
     except Exception:
         return _judge_fallback(ticker, company_name, ctx)
 
