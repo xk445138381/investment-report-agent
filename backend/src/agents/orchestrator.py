@@ -295,6 +295,7 @@ class Orchestrator:
             return await run_section_writer(
                 ticker=ctx.ticker, company_name=ctx.company_name,
                 ctx_state=ctx.state,
+                template_id=ctx.template_id,
             )
         if agent_name == "chart_generator":
             from agents.assembly.chart_agent import run_chart_agent

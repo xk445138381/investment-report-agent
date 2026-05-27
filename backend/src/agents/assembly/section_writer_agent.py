@@ -18,6 +18,11 @@ async def run_section_writer(ticker, company_name, ctx_state, template_id="deep_
     gov = ctx_state.get("corporate_governance", {}).get("result", {})
     industry = ctx_state.get("industry_competition", {}).get("result", {})
 
+    # Route to value investing template
+    if "value_investor" in template_id:
+        return _render_value_template(ticker, company_name, ctx_state, fin_analysis, valuation, gov, industry, financials)
+
+    # Original deep_dive template
     current_price = _n(valuation.get("current_price")) or _n(valuation.get("weighted_value", 0))
     upside = _n(valuation.get("weighted_upside_pct", 0))
     target = _n(valuation.get("weighted_value", 0))
@@ -54,6 +59,209 @@ def _pct(v, decimals=1):
     """Format as percentage string."""
     if v is None: return "N/A"
     return f"{v*100:.{decimals}f}%"
+
+
+def _render_value_template(ticker, company_name, ctx_state, fin_analysis, valuation, gov, industry, financials):
+    """Render the 8-section value investing report template."""
+    duan = ctx_state.get("duan_case", {}).get("result", {})
+    munger = ctx_state.get("munger_case", {}).get("result", {})
+    vjudge = ctx_state.get("value_judge", {}).get("result", {})
+    price_data = ctx_state.get("price_data", {}).get("result", {})
+    score = fin_analysis.get("financial_health_score", {})
+    ratios = financials.get("ratios", {}) or fin_analysis.get("ratios", {}) or {}
+
+    current_price = _n(valuation.get("current_price", 0)) or _n(price_data.get("price_summary", {}).get("latest_price", 0))
+    upside = _n(valuation.get("weighted_upside_pct", 0))
+    target = _n(valuation.get("weighted_value", 0))
+    verdict = vjudge.get("verdict", "HOLD")
+    verdict_conf = vjudge.get("verdict_confidence", 50)
+
+    label = "Yes（可买）" if verdict in ("Yes", "STRONG_BUY", "BUY") else (
+        "No（不买）" if verdict in ("No", "SELL", "STRONG_SELL") else "Too Hard（太难）")
+
+    return {
+        "sections": {
+            "executive_summary": {
+                "title": "一句话投资摘要",
+                "content": _val_one_liner(ticker, company_name, current_price, target, upside, label, verdict_conf, score, duan),
+                "word_count": 150,
+            },
+            "business_model": {
+                "title": "商业模式：它怎么赚钱，为什么能持续",
+                "content": duan.get("analysis", "商业模式分析待补充")[:1200],
+                "word_count": len(duan.get("analysis", "")) // 3,
+            },
+            "corporate_character": {
+                "title": "企业文化与本分",
+                "content": _val_culture_section(gov, duan, ratios),
+                "word_count": 200,
+            },
+            "financial_health": {
+                "title": "财务健康与现金流",
+                "content": _val_financial_health(ratios, score, financials, fin_analysis),
+                "word_count": 300,
+            },
+            "valuation": {
+                "title": "估值与安全边际",
+                "content": _val_safety_margin(valuation, current_price),
+                "word_count": 300,
+            },
+            "inversion_checklist": {
+                "title": "逆向风险清单：这笔投资怎么死",
+                "content": munger.get("analysis", "风险分析待补充")[:1200],
+                "word_count": len(munger.get("analysis", "")) // 3,
+            },
+            "dual_verdict": {
+                "title": "双重视角裁决",
+                "content": _val_dual_verdict(vjudge, duan, munger),
+                "word_count": 300,
+            },
+            "final_judgment": {
+                "title": "综合判定",
+                "content": _val_final_judgment(verdict, label, verdict_conf, target, upside, company_name, vjudge),
+                "word_count": 200,
+            },
+        },
+        "report_title": f"{company_name} ({ticker}) — 价值投资视角",
+        "report_subtitle": f"段永平 × 芒格 双重视角 | {date.today().strftime('%Y年%m月')}",
+        "report_date": date.today().isoformat(),
+    }
+
+
+def _val_one_liner(ticker, name, price, target, upside, label, conf, score, duan):
+    direction = "上行" if upside > 0 else "下行"
+    biz_ok = duan.get("business_clarity", 50) if duan.get("business_clarity") else 50
+    parts = [
+        f"{name}（{ticker}）当前 {price:.2f} 元。",
+        f"判定：**{label}**（置信度 {conf}%）。" if conf else f"判定：**{label}**。",
+    ]
+    if target > 0 and upside != 0:
+        parts.append(f"估计内在价值 {target:.2f} 元，{direction}空间 {abs(upside):.1f}%。")
+    if score.get("rating"):
+        parts.append(f"财务底子：{score.get('rating', '?')}。")
+    if biz_ok >= 70:
+        parts.append("商业模式清晰，看得懂。")
+    return " ".join(parts)
+
+
+def _val_culture_section(gov, duan, ratios):
+    parts = []
+    o = gov.get("ownership_structure", "")
+    if o and "待补充" not in str(o):
+        parts.append(f"股权结构：{o[:150]}")
+    if duan.get("culture_benfen"):
+        parts.append(f"本分评分：{duan['culture_benfen']}/100")
+    if ratios.get("debt_to_equity"):
+        de = ratios["debt_to_equity"]
+        if de < 0.3:
+            parts.append("财务保守（低杠杆），管理层不赌——好信号。")
+        elif de > 1.5:
+            parts.append("高杠杆运营，管理层在放大风险——减分。")
+    if duan.get("analysis"):
+        # Extract the culture/management part of Duan's analysis
+        analysis = duan.get("analysis", "")
+        if "企业文化" in analysis or "本分" in analysis or "管理" in analysis:
+            parts.append(analysis[analysis.find("企业"):analysis.find("企业")+300] if "企业" in analysis else "")
+    return "\n\n".join(p for p in parts if p) or "管理层数据待补充。"
+
+
+def _val_financial_health(ratios, score, financials, fa):
+    r = ratios
+    lines = [f"财务健康综合评分：{score.get('total','?')}/{score.get('max','?')} — **{score.get('rating','?')}**"]
+    lines.append("")
+    lines.append("| 指标 | 数值 | 评价 |")
+    lines.append("|------|------|------|")
+    if r.get("roe"): lines.append(f"| ROE | {r['roe']*100:.1f}% | {'优秀' if r['roe']>0.2 else '良好' if r['roe']>0.15 else '一般'} |")
+    if r.get("fcf_to_net_income"): lines.append(f"| FCF/净利润 | {r['fcf_to_net_income']:.2f} | {'现金机器' if r['fcf_to_net_income']>0.8 else '一般' if r['fcf_to_net_income']>0.5 else '需关注'} |")
+    if r.get("debt_to_equity"): lines.append(f"| 负债权益比 | {r['debt_to_equity']:.2f} | {'低杠杆' if r['debt_to_equity']<0.3 else '中等' if r['debt_to_equity']<0.7 else '高杠杆'} |")
+    if r.get("revenue_growth_yoy"): lines.append(f"| 营收增长 YoY | {r['revenue_growth_yoy']*100:+.1f}% | {'强劲' if r['revenue_growth_yoy']>0.15 else '稳健' if r['revenue_growth_yoy']>0.05 else '放缓'} |")
+    if r.get("ocf_to_revenue"): lines.append(f"| 经营现金流/营收 | {r['ocf_to_revenue']*100:.1f}% | {'优质' if r['ocf_to_revenue']>0.2 else '需关注'} |")
+    lines.append("")
+    lines.append("底线：这盘生意的财务底子" + ("好。" if score.get('total',0) >= 20 else "一般，需要更厚的安全边际。" if score.get('total',0) >= 10 else "有问题。不买。"))
+    return "\n".join(lines)
+
+
+def _val_safety_margin(valuation, current_price):
+    lines = []
+    models = valuation.get("models", {})
+    dcf = models.get("dcf", {}).get("per_share_value", 0) or 0
+    oe = models.get("owner_earnings", {}).get("per_share_value", 0) or 0
+    ev = models.get("ev_ebitda", {}).get("per_share_value", 0) or 0
+    wv = _n(valuation.get("weighted_value", 0))
+    upside = _n(valuation.get("weighted_upside_pct", 0))
+
+    if wv > 0:
+        lines.append(f"**内在价值估算：{wv:.2f} 元/股**（当前价格 {current_price:.2f}，{'+' if upside>0 else ''}{upside:.1f}% 空间）")
+        lines.append("")
+        if dcf > 0: lines.append(f"- DCF 三阶段模型：{dcf:.2f}")
+        if oe > 0: lines.append(f"- Owner Earnings：{oe:.2f}")
+        if ev > 0: lines.append(f"- EV/EBITDA 对标：{ev:.2f}")
+
+        safety = (wv - current_price) / wv * 100 if wv > 0 else 0
+        lines.append("")
+        if safety > 30:
+            lines.append(f"安全边际：{safety:.0f}%（>30%，足够厚）。")
+            lines.append(f"合理买价区间：低于 {wv*0.7:.0f} 元开始买入，低于 {wv*0.5:.0f} 元可重仓。")
+        elif safety > 10:
+            lines.append(f"安全边际：{safety:.0f}%（尚可但不厚）。")
+            lines.append("当前价格不算贵，但也谈不上便宜。小仓位试探，等更好的价格。")
+        else:
+            lines.append("安全边际不足。好东西也要等好价钱。放着，不急。")
+    else:
+        lines.append("估值数据不足，无法给出具体买价区间。")
+    return "\n".join(lines)
+
+
+def _val_dual_verdict(vjudge, duan, munger):
+    lines = []
+    duan_v = duan.get("verdict", "?")
+    munger_v = munger.get("verdict", "?")
+    consensus = vjudge.get("consensus", "")
+    disagreement = vjudge.get("disagreement", "")
+
+    lines.append("### 段永平的判断")
+    duan_text = duan.get("analysis", "")
+    # Get the concluding paragraph
+    if duan_text:
+        para = duan_text.split("\n")[-1] if "\n" in duan_text else duan_text[-200:]
+        lines.append(para[:300] if len(para) > 300 else para)
+    else:
+        lines.append(f"总体评估：{duan.get('overall_score','?')}/100 → {duan_v}")
+    lines.append("")
+
+    lines.append("### 芒格的判断")
+    munger_text = munger.get("analysis", "")
+    if munger_text:
+        para = munger_text.split("\n")[-1] if "\n" in munger_text else munger_text[-200:]
+        lines.append(para[:300] if len(para) > 300 else para)
+    else:
+        lines.append(f"风险评估：{munger.get('overall_risk','?')}/100 → {munger_v}")
+    lines.append("")
+
+    if consensus:
+        lines.append(f"### 共识\n{consensus}")
+    if disagreement:
+        lines.append(f"\n### 分歧\n{disagreement}")
+
+    return "\n".join(lines)
+
+
+def _val_final_judgment(verdict, label, conf, target, upside, name, vjudge):
+    lines = [
+        f"## {label}",
+        f"",
+        f"{name} — {verdict}（置信度 {conf}%）。",
+    ]
+    price_range = vjudge.get("price_range", "")
+    position = vjudge.get("position_sizing", "")
+    if price_range:
+        lines.append(f"买价参考：{price_range}。")
+    if position:
+        lines.append(f"仓位建议：{position}。")
+    lines.append("")
+    lines.append("---")
+    lines.append("*免责声明：本报告由 AI 辅助生成，分析框架基于段永平和查理·芒格的价值投资思想。所有结论均来自公开数据推算，不构成投资建议。独立思考，独立决策。*")
+    return "\n".join(lines)
 
 
 def _exec_summary(ticker, name, price, target, upside, verdict, score, ratios, risks):
