@@ -1,6 +1,7 @@
 """Value Judge Agent — 段永平+芒格双视角综合裁决."""
 
-import logging, random, asyncio, json, os, requests
+import logging, random, asyncio, json, os
+from langchain_core.messages import HumanMessage
 
 logger = logging.getLogger(__name__)
 
@@ -45,34 +46,33 @@ async def run_value_judge(ticker, company_name, duan_result=None, munger_result=
     }
 
     try:
-        from config.loader import load_config
+        from config.loader import load_config, LLMRegistry
         config = load_config()
+        registry = LLMRegistry(config)
+        model = registry.get_model("value_judge")
         agent_cfg = config.agents.get("value_judge", {})
         timeout = agent_cfg.get("timeout_seconds", 300)
-        provider_id = agent_cfg.llm if agent_cfg else "provider_quick"
-        provider_cfg = config.llm_providers.get(provider_id, config.llm_providers.get("provider_quick"))
-    except Exception:
+    except Exception as e:
+        logger.info(f"Value judge: LLM registry unavailable ({e})")
         return _judge_fallback(ticker, company_name, ctx)
 
     prompt = _build_judge_prompt(ctx)
-    api_key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
-    base_url = provider_cfg.base_url or "https://api.deepseek.com/v1"
-
     for attempt in range(3):
         try:
-            text = await asyncio.wait_for(
+            response = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(
-                    None, lambda: _call_deepseek_sync(base_url, api_key, provider_cfg.model, prompt, 120)
+                    None, lambda: model.invoke([HumanMessage(content=prompt)])
                 ),
                 timeout=timeout // 2
             )
-            if text:
+            text = response.content if hasattr(response, "content") else str(response)
+            if text and len(text) > 50:
                 return _parse_judge_response(text, ticker, company_name)
         except asyncio.TimeoutError:
             logger.warning(f"Value judge({ticker}): LLM timeout attempt {attempt+1}/3")
             await asyncio.sleep(2)
         except Exception as e:
-            logger.warning(f"Value judge({ticker}): LLM error attempt {attempt+1}/3: {e}")
+            logger.warning(f"Value judge({ticker}): LLM error attempt {attempt+1}/3: {type(e).__name__}")
             await asyncio.sleep(2)
 
     logger.warning(f"Value judge({ticker}): All 3 LLM attempts failed, using fallback")
