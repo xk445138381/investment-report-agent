@@ -62,7 +62,7 @@ async def run_value_judge(ticker, company_name, duan_result=None, munger_result=
         try:
             text = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(
-                    None, lambda: _call_deepseek_sync(base_url, api_key, provider_cfg.model, prompt, 60)
+                    None, lambda: _call_deepseek_sync(base_url, api_key, provider_cfg.model, prompt, 120)
                 ),
                 timeout=timeout // 2
             )
