@@ -45,34 +45,21 @@ async def run_value_judge(ticker, company_name, duan_result=None, munger_result=
         "valuation": _summarize_val(val),
     }
 
-    try:
-        from config.loader import load_config, LLMRegistry
-        config = load_config()
-        registry = LLMRegistry(config)
-        model = registry.get_model("value_judge")
-        agent_cfg = config.agents.get("value_judge", {})
-        timeout = agent_cfg.get("timeout_seconds", 300)
-    except Exception as e:
-        logger.info(f"Value judge: LLM registry unavailable ({e})")
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    if not api_key:
         return _judge_fallback(ticker, company_name, ctx)
 
     prompt = _build_judge_prompt(ctx)
-    for attempt in range(3):
+    for attempt in range(2):
         try:
-            response = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(
-                    None, lambda: model.invoke([HumanMessage(content=prompt)])
-                ),
-                timeout=timeout // 2
+            from agents.analysis.llm_subprocess import call_llm
+            text = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: call_llm(api_key, "https://api.deepseek.com/v1", "deepseek-v4-pro", prompt, 120)
             )
-            text = response.content if hasattr(response, "content") else str(response)
             if text and len(text) > 50:
                 return _parse_judge_response(text, ticker, company_name)
-        except asyncio.TimeoutError:
-            logger.warning(f"Value judge({ticker}): LLM timeout attempt {attempt+1}/3")
-            await asyncio.sleep(2)
         except Exception as e:
-            logger.warning(f"Value judge({ticker}): LLM error attempt {attempt+1}/3: {type(e).__name__}")
+            logger.warning(f"Value judge({ticker}): LLM attempt {attempt+1}/2: {type(e).__name__}")
             await asyncio.sleep(2)
 
     logger.warning(f"Value judge({ticker}): All 3 LLM attempts failed, using fallback")

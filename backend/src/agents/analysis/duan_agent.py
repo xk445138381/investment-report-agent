@@ -51,38 +51,29 @@ async def run_duan_agent(ticker, company_name, financial_analysis=None, valuatio
         "price": _summarize_price(price),
     }
 
-    # Try LLM via langchain sync invoke in thread pool (proven to work)
-    try:
-        from config.loader import load_config, LLMRegistry
-        config = load_config()
-        registry = LLMRegistry(config)
-        model = registry.get_model("duan_case")
-        agent_cfg = config.agents.get("duan_case", {})
-        timeout = agent_cfg.get("timeout_seconds", 300)
-    except Exception as e:
-        logger.info(f"Duan agent: LLM registry unavailable ({e}), using fallback")
+    # Try LLM via subprocess (completely isolated from uvicorn event loop)
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    logger.info(f"Duan agent({ticker}): api_key={'set' if api_key else 'MISSING'}, trying subprocess LLM")
+    if not api_key:
         return _duan_fallback(ticker, company_name, ctx)
 
     prompt = _build_duan_prompt(ctx)
-    for attempt in range(3):
+    logger.info(f"Duan agent({ticker}): prompt built ({len(prompt)} chars), starting subprocess...")
+    for attempt in range(2):
         try:
-            response = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(
-                    None, lambda: model.invoke([HumanMessage(content=prompt)])
-                ),
-                timeout=timeout // 2
+            from agents.analysis.llm_subprocess import call_llm
+            logger.info(f"Duan agent({ticker}): attempt {attempt+1}/2 calling subprocess...")
+            text = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: call_llm(api_key, "https://api.deepseek.com/v1", "deepseek-v4-pro", prompt, 120)
             )
-            text = response.content if hasattr(response, "content") else str(response)
+            logger.info(f"Duan agent({ticker}): subprocess returned text={'yes' if text else 'no'}, len={len(text) if text else 0}")
             if text and len(text) > 50:
                 return _parse_duan_response(text, ticker, company_name)
-        except asyncio.TimeoutError:
-            logger.warning(f"Duan agent({ticker}): LLM timeout attempt {attempt+1}/3")
-            await asyncio.sleep(2)
         except Exception as e:
-            logger.warning(f"Duan agent({ticker}): LLM error attempt {attempt+1}/3: {type(e).__name__}")
+            logger.warning(f"Duan agent({ticker}): LLM attempt {attempt+1}/2: {type(e).__name__}: {e}")
             await asyncio.sleep(2)
 
-    logger.warning(f"Duan agent({ticker}): All 3 LLM attempts failed, using fallback")
+    logger.warning(f"Duan agent({ticker}): LLM failed, using fallback")
     return _duan_fallback(ticker, company_name, ctx)
 
 
