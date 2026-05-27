@@ -61,16 +61,19 @@ class Orchestrator:
         """
         import re
 
+        template_id = context.get("preferred_template") or "deep_dive_default"
         result = {
             "pipeline_type": "deep_dive",
             "ticker": None,
             "company_name": None,
-            "template_id": context.get("preferred_template") or "deep_dive_default",
+            "template_id": template_id,
             "error": None,
         }
 
-        # Detect report type from message (check "宏观/周报/IPO" before "简报/快速")
-        if any(w in user_message for w in ["宏观", "周报"]):
+        # Detect report type: value investing templates use their own pipeline
+        if "value_investor" in template_id:
+            result["pipeline_type"] = "value_deep_dive"
+        elif any(w in user_message for w in ["宏观", "周报"]):
             result["pipeline_type"] = "macro_weekly"
         elif any(w in user_message for w in ["ipo", "新股", "上市"]):
             result["pipeline_type"] = "ipo"
@@ -188,6 +191,41 @@ class Orchestrator:
                 ticker=ctx.ticker, company_name=ctx.company_name,
                 financials=ctx.state.get("_financials", []),
                 prices=ctx.state.get("_prices", []),
+            )
+
+        # Phase 3a: Value investing perspective agents (段永平 + 芒格)
+        if agent_name == "duan_case":
+            from agents.analysis.duan_agent import run_duan_agent
+            return await run_duan_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                financial_analysis=ctx.state.get("financial_analysis", {}),
+                valuation=ctx.state.get("valuation", {}),
+                price_data=ctx.state.get("price_data", {}),
+                corporate_governance=ctx.state.get("corporate_governance", {}),
+                industry_competition=ctx.state.get("industry_competition", {}),
+            )
+        if agent_name == "munger_case":
+            from agents.analysis.munger_agent import run_munger_agent
+            return await run_munger_agent(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                financial_analysis=ctx.state.get("financial_analysis", {}),
+                valuation=ctx.state.get("valuation", {}),
+                price_data=ctx.state.get("price_data", {}),
+                corporate_governance=ctx.state.get("corporate_governance", {}),
+                industry_competition=ctx.state.get("industry_competition", {}),
+            )
+        if agent_name == "value_judge":
+            from agents.analysis.value_judge_agent import run_value_judge
+            duan_w = ctx.state.get("duan_case", {})
+            munger_w = ctx.state.get("munger_case", {})
+            val_w = ctx.state.get("valuation", {})
+            fa_w = ctx.state.get("financial_analysis", {})
+            return await run_value_judge(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                duan_result=duan_w.get("result", duan_w),
+                munger_result=munger_w.get("result", munger_w),
+                valuation=val_w.get("result", val_w),
+                financial_analysis=fa_w.get("result", fa_w),
             )
 
         # Phase 3: Debate agents

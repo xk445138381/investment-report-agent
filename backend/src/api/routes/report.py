@@ -38,7 +38,9 @@ class TaskStatus(BaseModel):
 async def generate_report(req: GenerateRequest):
     """Start a report generation task."""
     orchestrator = Orchestrator(get_config())
-    route_result = await orchestrator.route(req.ticker, {})
+    route_result = await orchestrator.route(req.ticker, {
+        "preferred_template": req.template_id,
+    })
     if route_result.get("error"):
         raise HTTPException(400, route_result["error"])
 

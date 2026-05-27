@@ -1,0 +1,130 @@
+{
+  "$schema": "https://investment-report-agent.dev/schemas/template-v1.json",
+  "template_id": "value_investor",
+  "name": "价值投资研报（段永平+芒格双视角）",
+  "version": "1.0",
+  "author": "system",
+  "description": "八章报告：商业模式 → 企业文化 → 财务健康 → 估值安全边际 → 逆向风险清单 → 双重视角裁决。不是传统卖方研报，是价值投资者的决策工具。",
+  "applicable_markets": ["CN", "HK", "US"],
+  "report_type": "value_deep_dive",
+
+  "voice": {
+    "段永平": "务实、温和、聚焦企业运营本质。常用句：'买股票就是买公司'、'未来现金流折现'、'敢为天下后'、'本分'",
+    "芒格": "锋利、直接、聚焦认知偏误。常用句：'反过来想'、'Too Hard'、'葡萄干拌屎还是屎'、'坐在屁股上不动'",
+    "裁决": "不做和稀泥。分歧明确标注，共识重点强化。不确定就说'不知道'——不装懂。"
+  },
+
+  "sections": [
+    {
+      "id": "executive_summary",
+      "title": "一句话投资摘要",
+      "agent": "section_writer",
+      "max_words": 200,
+      "required_elements": [
+        {"type": "one_liner", "label": "公司是什么、怎么赚钱、能不能持续"},
+        {"type": "rating_box", "label": "综合判定", "fields": ["Yes / No / Too Hard", "安全边际", "合理买价区间"]},
+        {"type": "key_numbers", "label": "关键数字", "fields": ["当前价格", "估计内在价值", "上行空间", "最近年度FCF"]}
+      ]
+    },
+    {
+      "id": "business_model",
+      "title": "商业模式：它怎么赚钱，为什么能持续",
+      "agent": "section_writer",
+      "max_words": 500,
+      "perspective": "段永平",
+      "required_elements": [
+        {"type": "clarity_test", "label": "段永平三问：客户是谁？为什么用你的产品不用别人的？十年后还能赚钱吗？"},
+        {"type": "moat_check", "label": "护城河：品牌/转换成本/网络效应/规模经济，哪个是真、哪个是幻觉"},
+        {"type": "cash_flow_quality", "label": "现金流质量：利润里有几分是真金白银（FCF/净利润 > 0.8 为佳）"}
+      ]
+    },
+    {
+      "id": "corporate_character",
+      "title": "企业文化与本分",
+      "agent": "section_writer",
+      "max_words": 400,
+      "perspective": "段永平",
+      "required_elements": [
+        {"type": "benfen_check", "label": "本分检测：管理层是否在做对的事？战略一致性如何？"},
+        {"type": "capital_allocation", "label": "资本配置能力：回购是在低估时买的吗？并购有纪律吗？分红可持续吗？"},
+        {"type": "incentive_check", "label": "芒格激励诊断：管理层激励是否与股东对齐？"}
+      ]
+    },
+    {
+      "id": "financial_health",
+      "title": "财务健康与现金流",
+      "agent": "section_writer",
+      "max_words": 400,
+      "required_elements": [
+        {"type": "core_metrics", "label": "核心指标", "fields": ["ROE (5年趋势)", "FCF/净利润", "负债权益比", "毛利率", "营收/利润 CAGR (3Y/5Y)"]},
+        {"type": "red_flags", "label": "财务异常检测：应收账款增速 > 营收增速？存货激增？非经常性损益占比过高？"},
+        {"type": "summary", "label": "一句话：这盘生意的财务底子好不好？"}
+      ]
+    },
+    {
+      "id": "valuation",
+      "title": "估值与安全边际",
+      "agent": "section_writer",
+      "max_words": 400,
+      "required_elements": [
+        {"type": "dcf_brief", "label": "简化 DCF：最近 FCF × 合理增长假设 × 折现 → 内在价值区间"},
+        {"type": "owner_earnings", "label": "Owner Earnings：净利润 + 折旧 - 维持性资本支出 - Δ营运资本"},
+        {"type": "safety_margin", "label": "安全边际：当前价格 vs 内在价值，折扣够不够 30%？"},
+        {"type": "sensitivity", "label": "情景：悲观/基准/乐观三种假设下的价值区间"}
+      ]
+    },
+    {
+      "id": "inversion_checklist",
+      "title": "逆向风险清单：这笔投资怎么死",
+      "agent": "section_writer",
+      "max_words": 500,
+      "perspective": "芒格",
+      "required_elements": [
+        {"type": "death_paths", "label": "逆向思考：列出3-5种让这笔投资归零的路径"},
+        {"type": "lollapalooza", "label": "Lollapalooza 检测：多种风险因子同时发力的场景（如：行业下行 + 管理层误判 + 杠杆放大）"},
+        {"type": "bias_check", "label": "买方常见偏误自检：确认偏误/过度乐观外推/社会认同/被剥夺超级反应——这笔投资是不是FOMO？"},
+        {"type": "three_baskets", "label": "芒格三筐：Yes / No / Too Hard —— 凭什么不是第三筐？"}
+      ]
+    },
+    {
+      "id": "dual_verdict",
+      "title": "双重视角裁决",
+      "agent": "section_writer",
+      "max_words": 300,
+      "required_elements": [
+        {"type": "duan_says", "label": "段永平视角：这个商业模式你懂吗？价格合理吗？敢不敢拿十年？"},
+        {"type": "munger_says", "label": "芒格视角：逆向想过吗？激励机制对吗？有没有Lollapalooza？"},
+        {"type": "consensus", "label": "共识：两人都同意什么？"},
+        {"type": "disagreement", "label": "分歧：两人在哪里有不同看法？为什么？"}
+      ]
+    },
+    {
+      "id": "final_judgment",
+      "title": "综合判定",
+      "agent": "section_writer",
+      "max_words": 200,
+      "required_elements": [
+        {"type": "verdict", "label": "判定: Yes / No / Too Hard"},
+        {"type": "price_range", "label": "如果 Yes，合理买价：低于 X 元开始买入，低于 Y 元重仓"},
+        {"type": "position_sizing", "label": "仓位建议：最多占组合 X%（凯利公式参考）"},
+        {"type": "revisit_trigger", "label": "什么情况需要重新评估？（商业模式变了/管理层变了/估值极端了）"}
+      ]
+    }
+  ],
+
+  "disclaimer": "本报告由 AI 辅助生成，分析框架基于段永平和查理·芒格的价值投资思想。所有结论均来自公开数据推算，不构成投资建议。价值投资的核心是独立思考——请把这份报告当作一个视角，而非答案。",
+
+  "style": {
+    "fonts": {
+      "heading": {"family": "Source Han Serif SC", "size_pt": 16},
+      "body": {"family": "Source Han Serif SC", "size_pt": 11, "line_height": 1.8}
+    },
+    "colors": {
+      "yes": "#2d5016",
+      "no": "#8b0000",
+      "too_hard": "#666666",
+      "accent": "#1a1a2e",
+      "background": "#fafaf8"
+    }
+  }
+}

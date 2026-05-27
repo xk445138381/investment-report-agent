@@ -25,9 +25,55 @@
       "api_key_source": "env:DEEPSEEK_API_KEY",
       "timeout_seconds": 60,
       "note": "DeepSeek V4 Pro — 数据聚合、摘要、图表"
+    },
+    "provider_heavy": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "temperature": 0.4,
+      "max_tokens": 8000,
+      "api_key_source": "env:OPENAI_API_KEY",
+      "timeout_seconds": 120,
+      "note": "GPT-4o — 段永平/芒格视角评估（重度推理）"
+    },
+    "provider_heavy_claude": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "temperature": 0.4,
+      "max_tokens": 8000,
+      "api_key_source": "env:ANTHROPIC_API_KEY",
+      "timeout_seconds": 120,
+      "note": "Claude Sonnet 4.6 — 段永平/芒格视角评估备选"
     }
   },
   "pipelines": {
+    "value_deep_dive": {
+      "name": "价值投资研报（段永平+芒格双视角）",
+      "phases": {
+        "phase_1": {
+          "parallel": true,
+          "agents": ["price_data", "financial_data", "news_data", "macro_data"]
+        },
+        "phase_2": {
+          "parallel": true,
+          "agents": ["financial_analysis", "valuation", "industry_competition", "corporate_governance"]
+        },
+        "phase_3": {
+          "parallel": true,
+          "agents": ["duan_case", "munger_case"],
+          "debate_rounds": 1
+        },
+        "phase_3b": {
+          "parallel": false,
+          "agents": ["value_judge"],
+          "debate_rounds": 1
+        },
+        "phase_4": {
+          "parallel": false,
+          "agents": ["section_writer", "chart_generator", "title_summary"],
+          "export": ["pdf"]
+        }
+      }
+    },
     "deep_dive": {
       "name": "深度研报",
       "phases": {
@@ -87,6 +133,9 @@
     "bull_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 25},
     "bear_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 25},
     "risk_judge": {"llm": "provider_deep", "output_schema": "RiskJudgeResult", "timeout_seconds": 25},
+    "duan_case": {"llm": "provider_heavy", "fallback_llm": "provider_deep", "output_schema": "ValuePerspectiveResult", "timeout_seconds": 120, "note": "段永平视角：商业模式+本分+现金流确定性"},
+    "munger_case": {"llm": "provider_heavy", "fallback_llm": "provider_deep", "output_schema": "ValuePerspectiveResult", "timeout_seconds": 120, "note": "芒格视角：逆向+Lollapalooza+激励诊断"},
+    "value_judge": {"llm": "provider_heavy", "fallback_llm": "provider_deep", "output_schema": "ValueJudgeResult", "timeout_seconds": 120, "note": "双视角裁决：共识/分歧/Yes-No-Too Hard"},
     "section_writer": {"llm": "provider_deep", "output_schema": "ReportSections", "timeout_seconds": 300},
     "chart_generator": {"llm": "provider_quick", "output_schema": "ChartOutputs", "timeout_seconds": 60},
     "title_summary": {"llm": "provider_quick", "output_schema": "ReportMetadata", "timeout_seconds": 30}
