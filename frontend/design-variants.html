@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新建分析 · 3 种交互模式对比</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-warm: #FAF8F5; --bg-surface: #F3F0EC; --bg-elevated: #FFFFFF;
+  --ink-primary: #2D2420; --ink-secondary: #6B5E58; --ink-tertiary: #9E9288;
+  --accent: #C04A1A; --accent-hover: #A03D12; --accent-soft: #F5E6DD;
+  --data-positive: #3D6B4F; --border-light: #E8E2DB; --border: #D4C5B9;
+  --font-serif: "Noto Serif SC", ui-serif, serif;
+  --font-sans: "Noto Sans SC", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Playfair Display", "Noto Serif SC", ui-serif, serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans); background: var(--bg-warm);
+  color: var(--ink-primary); -webkit-font-smoothing: antialiased; line-height: 1.8;
+  overflow-x: hidden;
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
+
+const PIPELINE = [
+  { id:"p1", num:"01", name:"数据聚合", agents:["行情","财报","新闻","宏观"] },
+  { id:"p2", num:"02", name:"深度分析", agents:["财务","估值","行业","治理"] },
+  { id:"p3", num:"03", name:"多空辩论", agents:["多头","空头","裁判"] },
+  { id:"p4", num:"04", name:"统稿排版", agents:["撰写","图表","摘要"] },
+];
+
+const SUGGESTIONS = ["贵州茅台","宁德时代","腾讯控股","Apple","五粮液","恒瑞医药","自定义…"];
+
+/* ── Shared: Section Label ── */
+function SectionLabel({ variant, name, desc }) {
+  return React.createElement("div", {style:{textAlign:"center",marginBottom:24}},
+    React.createElement("div", {style:{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--ink-tertiary)",letterSpacing:"0.12em",marginBottom:4}}, "VARIANT "+variant),
+    React.createElement("div", {style:{fontFamily:"var(--font-serif)",fontSize:20,fontWeight:700,color:"var(--ink-primary)",marginBottom:4,letterSpacing:"0.03em"}}, name),
+    React.createElement("div", {style:{fontSize:12,color:"var(--ink-secondary)",maxWidth:280,margin:"0 auto",lineHeight:1.6}}, desc)
+  );
+}
+
+/* ── Shared: Pipeline Strip ── */
+function PipelineStrip() {
+  return React.createElement("div", {style:{display:"flex",alignItems:"flex-start",justifyContent:"center",gap:0,marginTop:16}},
+    PIPELINE.map((p,i) => React.createElement(React.Fragment, {key:p.id},
+      i>0 && React.createElement("div", {style:{padding:"8px 4px",color:"var(--border)",fontSize:12}}, "→"),
+      React.createElement("div", {style:{textAlign:"center",width:64}},
+        React.createElement("div", {style:{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--ink-tertiary)",marginBottom:2}}, p.num),
+        React.createElement("div", {style:{fontSize:10,color:"var(--ink-secondary)",fontWeight:500}}, p.name),
+        React.createElement("div", {style:{fontSize:8,color:"var(--ink-tertiary)",marginTop:2,lineHeight:1.4}},
+          p.agents.map(a=>React.createElement("div", {key:a}, a))
+        )
+      )
+    ))
+  );
+}
+
+/* ── Shared: Action Button ── */
+function ActionBtn({ children, primary, onClick, disabled, style: extraStyle }) {
+  const [hover, setHover] = useState(false);
+  const base = {
+    padding:"10px 28px",fontSize:13,fontWeight:500,cursor: disabled ? "not-allowed" : "pointer",
+    fontFamily:"var(--font-sans)",border:"none",display:"inline-flex",
+    alignItems:"center",gap:6,transition:"all 0.2s",
+    background: primary ? "var(--accent)" : "var(--bg-surface)",
+    color: primary ? "#fff" : "var(--ink-secondary)",
+    border: primary ? "none" : "1px solid var(--border-light)",
+    opacity: disabled ? 0.4 : 1,
+    ...(extraStyle||{})
+  };
+  const over = !disabled ? {
+    background: primary ? "var(--accent-hover)" : "var(--bg-surface)",
+    borderColor: primary ? "none" : "var(--border)",
+    color: primary ? "#fff" : "var(--ink-primary)",
+  } : {};
+  return React.createElement("button", {
+    onClick, disabled,
+    style: hover ? {...base,...over} : base,
+    onMouseEnter: ()=>setHover(true),
+    onMouseLeave: ()=>setHover(false),
+  }, children);
+}
+
+/* ═══════════════════════════════════════════
+   VARIANT A: Command-Line Style
+   ═══════════════════════════════════════════ */
+function VariantA() {
+  const [ticker, setTicker] = useState("");
+  const [depth, setDepth] = useState("deep");
+  const depths = [
+    { id:"brief", name:"快速简报", time:"约 45s", desc:"精简版，适合快速扫描标的" },
+    { id:"deep", name:"深度研报", time:"约 2min", desc:"全流程分析，14 Agent 管线" },
+    { id:"custom", name:"自定义", time:"按配置", desc:"自由选择 Agent 和参数" },
+  ];
+  return React.createElement("div", {style:{padding:"32px 24px 24px",minHeight:520}},
+    React.createElement(SectionLabel, {variant:"A",name:"命令行式",desc:"极简输入框 · 熟练用户 · 低认知负荷"}),
+
+    /* Command bar */
+    React.createElement("div", {style:{display:"flex",alignItems:"center",gap:8,maxWidth:440,margin:"0 auto",background:"var(--bg-elevated)",border:"1px solid",borderColor: ticker?"var(--accent)":"var(--border-light)",padding:"3px 3px 3px 14px",transition:"border-color 0.3s"}},
+      React.createElement("span", {style:{fontFamily:"var(--font-mono)",fontSize:15,color:"var(--ink-tertiary)"}}, "$"),
+      React.createElement("input", {type:"text",value:ticker,onChange:e=>setTicker(e.target.value),placeholder:"输入公司名称或股票代码…",style:{flex:1,border:"none",outline:"none",fontSize:14,fontFamily:"var(--font-sans)",background:"transparent",color:"var(--ink-primary)",padding:"10px 0"}}),
+      React.createElement("button", {disabled:!ticker.trim(),onClick:()=>{},style:{padding:"8px 20px",fontSize:13,fontWeight:500,cursor:ticker.trim()?"pointer":"not-allowed",fontFamily:"var(--font-sans)",border:"none",background:ticker.trim()?"var(--accent)":"var(--border-light)",color:ticker.trim()?"#fff":"var(--ink-tertiary)"}}, "生成报告 →")
+    ),
+
+    /* Suggestions */
+    React.createElement("div", {style:{display:"flex",justifyContent:"center",gap:6,marginTop:14,flexWrap:"wrap"}},
+      SUGGESTIONS.slice(0,5).map(s=>React.createElement("button",{key:s,onClick:()=>setTicker(s),style:{padding:"4px 12px",fontSize:11,fontFamily:"var(--font-sans)",background:"var(--bg-surface)",color:"var(--ink-secondary)",border:"1px solid var(--border-light)",cursor:"pointer"}},s))
+    ),
+
+    /* Depth selector */
+    React.createElement("div", {style:{marginTop:28}},
+      React.createElement("div", {style:{textAlign:"center",fontFamily:"var(--font-serif)",fontSize:14,color:"var(--ink-primary)",marginBottom:14,fontWeight:600}}, "分析深度"),
+      React.createElement("div", {style:{display:"flex",gap:10,justifyContent:"center"}},
+        depths.map(d=>React.createElement("div",{key:d.id,onClick:()=>setDepth(d.id),style:{padding:"12px 14px",width:150,cursor:"pointer",transition:"all 0.2s",background:depth===d.id?"var(--accent-soft)":"var(--bg-surface)",border:depth===d.id?"1px solid var(--accent)":"1px solid var(--border-light)"}},
+          React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:13,fontWeight:600,color:"var(--ink-primary)",marginBottom:3}},d.name),
+          React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--ink-tertiary)",marginBottom:4}},d.time),
+          React.createElement("div",{style:{fontSize:11,color:"var(--ink-secondary)",lineHeight:1.5}},d.desc)
+        ))
+      )
+    ),
+
+    React.createElement(PipelineStrip)
+  );
+}
+
+/* ═══════════════════════════════════════════
+   VARIANT B: Form Style
+   ═══════════════════════════════════════════ */
+function VariantB() {
+  const [ticker, setTicker] = useState("");
+  const [market, setMarket] = useState("CN");
+  const [depth, setDepth] = useState("deep");
+  const [agents, setAgents] = useState(["财务分析","估值建模","行业竞争","多头论点","空头论点","风险裁判","章节撰写","图表生成"]);
+  const toggleAgent = (name) => setAgents(prev=>prev.includes(name)?prev.filter(a=>a!==name):[...prev,name]);
+
+  const ALL_AGENTS = [
+    { phase:"Phase 1 · 数据", items:["行情数据","财报数据","公告新闻","宏观行业"] },
+    { phase:"Phase 2 · 分析", items:["财务分析","估值建模","行业竞争","公司治理"] },
+    { phase:"Phase 3 · 辩论", items:["多头论点","空头论点","风险裁判"] },
+    { phase:"Phase 4 · 排版", items:["章节撰写","图表生成","标题摘要"] },
+  ];
+
+  return React.createElement("div", {style:{padding:"32px 24px 24px",minHeight:520}},
+    React.createElement(SectionLabel, {variant:"B",name:"表单式",desc:"完整字段 · 新用户友好 · 精确控制"}),
+
+    React.createElement("div", {style:{maxWidth:420,margin:"0 auto"}},
+      React.createElement("div", {style:{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--ink-tertiary)",letterSpacing:"0.08em",marginBottom:8}}, "股票信息"),
+      React.createElement("div", {style:{display:"flex",gap:8,marginBottom:12}},
+        React.createElement("input", {type:"text",value:ticker,onChange:e=>setTicker(e.target.value),placeholder:"股票代码（如 600519）",style:{flex:2,padding:"8px 12px",fontSize:13,fontFamily:"var(--font-mono)",background:"var(--bg-elevated)",color:"var(--ink-primary)",border:"1px solid var(--border-light)",outline:"none"}}),
+        React.createElement("select", {value:market,onChange:e=>setMarket(e.target.value),style:{flex:1,padding:"8px 12px",fontSize:13,fontFamily:"var(--font-sans)",background:"var(--bg-elevated)",color:"var(--ink-primary)",border:"1px solid var(--border-light)",outline:"none"}},
+          React.createElement("option",{value:"CN"},"A 股"),
+          React.createElement("option",{value:"HK"},"港股"),
+          React.createElement("option",{value:"US"},"美股"),
+        )
+      ),
+
+      /* Depth radio */
+      React.createElement("div", {style:{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--ink-tertiary)",letterSpacing:"0.08em",marginBottom:8,marginTop:16}}, "分析深度"),
+      React.createElement("div", {style:{display:"flex",gap:8,marginBottom:12}},
+        [{id:"brief",label:"快速简报"},{id:"deep",label:"深度研报"},{id:"custom",label:"自定义"}].map(d=>
+          React.createElement("label", {key:d.id,style:{flex:1,padding:"8px 0",textAlign:"center",fontSize:12,cursor:"pointer",background:depth===d.id?"var(--accent-soft)":"var(--bg-surface)",border:depth===d.id?"1px solid var(--accent)":"1px solid var(--border-light)",fontFamily:"var(--font-sans)",color:"var(--ink-primary)",fontWeight:depth===d.id?500:400}},
+            React.createElement("input",{type:"radio",name:"depthB",value:d.id,checked:depth===d.id,onChange:()=>setDepth(d.id),style:{display:"none"}}),
+            d.label
+          )
+        )
+      ),
+
+      /* Agent checkboxes */
+      React.createElement("div", {style:{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--ink-tertiary)",letterSpacing:"0.08em",marginBottom:10,marginTop:16}}, "Agent 团队"),
+      React.createElement("div", {style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}},
+        ALL_AGENTS.map(g=>React.createElement(React.Fragment,{key:g.phase},
+          React.createElement("div",{style:{gridColumn:"1 / -1",fontSize:10,color:"var(--ink-tertiary)",marginTop:4}},g.phase),
+          g.items.map(a=>React.createElement("label",{key:a,style:{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",fontSize:11,cursor:"pointer",fontFamily:"var(--font-sans)",color:"var(--ink-secondary)",background:agents.includes(a)?"var(--accent-soft)":"transparent"}},
+            React.createElement("input",{type:"checkbox",checked:agents.includes(a),onChange:()=>toggleAgent(a),style:{accentColor:"var(--accent)"}}),
+            a
+          ))
+        ))
+      ),
+
+      React.createElement("div", {style:{marginTop:20,textAlign:"right"}},
+        React.createElement(ActionBtn, {primary:true,disabled:!ticker.trim()},"生成报告")
+      )
+    )
+  );
+}
+
+/* ═══════════════════════════════════════════
+   VARIANT C: Wizard Style
+   ═══════════════════════════════════════════ */
+function VariantC() {
+  const [step, setStep] = useState(1);
+  const [ticker, setTicker] = useState("");
+  const [depth, setDepth] = useState("deep");
+  const maxStep = 3;
+
+  const steps = [
+    { num:1, title:"选择标的", ok: !!ticker.trim() },
+    { num:2, title:"分析深度", ok: !!depth },
+    { num:3, title:"确认启动", ok: true },
+  ];
+
+  return React.createElement("div", {style:{padding:"32px 24px 24px",minHeight:520}},
+    React.createElement(SectionLabel, {variant:"C",name:"引导式",desc:"分步向导 · 渐进披露 · 无压迫感"}),
+
+    /* Step indicator */
+    React.createElement("div", {style:{display:"flex",alignItems:"center",justifyContent:"center",gap:0,marginBottom:36,position:"relative"}},
+      steps.map((s,i)=>React.createElement(React.Fragment, {key:s.num},
+        i>0 && React.createElement("div", {style:{width:40,height:1,background:s.ok?"var(--accent)":"var(--border-light)",transition:"all 0.4s"}}),
+        React.createElement("div", {style:{position:"relative"}},
+          React.createElement("div", {style:{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font-mono)",fontSize:12,fontWeight:500,background:step>=s.num?"var(--accent)":"var(--bg-surface)",color:step>=s.num?"#fff":"var(--ink-tertiary)",border:step>=s.num?"none":"1px solid var(--border-light)",transition:"all 0.3s"}},
+            step>s.num ? "✓" : s.num
+          ),
+          React.createElement("div", {style:{position:"absolute",top:36,left:"50%",transform:"translateX(-50%)",fontSize:10,fontFamily:"var(--font-sans)",color:step>=s.num?"var(--ink-primary)":"var(--ink-tertiary)",fontWeight:step===s.num?600:400,whiteSpace:"nowrap"}}, s.title)
+        )
+      ))
+    ),
+
+    /* Step content */
+    React.createElement("div", {style:{maxWidth:420,margin:"0 auto",minHeight:200}},
+      step===1 && React.createElement("div", null,
+        React.createElement("div", {style:{fontFamily:"var(--font-serif)",fontSize:16,fontWeight:600,color:"var(--ink-primary)",marginBottom:16,textAlign:"center"}}, "输入你要分析的标的"),
+        React.createElement("div", {style:{display:"flex",gap:10,marginBottom:16}},
+          React.createElement("input", {type:"text",value:ticker,onChange:e=>setTicker(e.target.value),placeholder:"公司名称或股票代码",onKeyDown:e=>e.key==="Enter"&&ticker.trim()&&setStep(2),autoFocus:true,style:{flex:1,padding:"10px 14px",fontSize:14,fontFamily:"var(--font-sans)",background:"var(--bg-elevated)",color:"var(--ink-primary)",border:"1px solid var(--border)",outline:"none"}})
+        ),
+        React.createElement("div", {style:{display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center"}},
+          SUGGESTIONS.map(s=>React.createElement("button",{key:s,onClick:()=>{setTicker(s);setStep(2);},style:{padding:"5px 14px",fontSize:12,fontFamily:"var(--font-sans)",cursor:"pointer",background:"var(--bg-surface)",color:"var(--ink-secondary)",border:"1px solid var(--border-light)"}},s))
+        )
+      ),
+
+      step===2 && React.createElement("div", null,
+        React.createElement("div", {style:{fontFamily:"var(--font-serif)",fontSize:16,fontWeight:600,color:"var(--ink-primary)",marginBottom:6,textAlign:"center"}}, "选择分析深度"),
+        React.createElement("div", {style:{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--ink-tertiary)",textAlign:"center",marginBottom:16}}, ticker||"标的"),
+        [
+          {id:"brief",name:"快速简报",agents:"6 Agent",time:"~45s",desc:"精简版：核心财务+简要估值+关键风险"},
+          {id:"deep",name:"深度研报",agents:"14 Agent",time:"~2min",desc:"全流程：四阶段管线+牛熊辩论+完整模型"},
+          {id:"custom",name:"自定义配置",agents:"可选",time:"按需",desc:"自由选择 Agent 组合和参数"},
+        ].map(d=>React.createElement("div",{key:d.id,onClick:()=>setDepth(d.id),style:{padding:"14px 16px",marginBottom:8,cursor:"pointer",transition:"all 0.2s",background:depth===d.id?"var(--accent-soft)":"var(--bg-surface)",border:depth===d.id?"1px solid var(--accent)":"1px solid var(--border-light)",display:"flex",alignItems:"center",justifyContent:"space-between"}},
+          React.createElement("div", null,
+            React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:14,fontWeight:600,color:"var(--ink-primary)",marginBottom:2}},d.name),
+            React.createElement("div",{style:{fontSize:11,color:"var(--ink-secondary)",lineHeight:1.5}},d.desc)
+          ),
+          React.createElement("div", {style:{textAlign:"right"}},
+            React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--ink-tertiary)"}},d.agents),
+            React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--ink-tertiary)"}},d.time)
+          )
+        ))
+      ),
+
+      step===3 && React.createElement("div", null,
+        React.createElement("div", {style:{fontFamily:"var(--font-serif)",fontSize:16,fontWeight:600,color:"var(--ink-primary)",marginBottom:6,textAlign:"center"}}, "确认分析配置"),
+        React.createElement("div", {style:{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--ink-tertiary)",textAlign:"center",marginBottom:20}}, (ticker||"茅台")+" · "+(depth==="deep"?"深度研报":depth==="brief"?"快速简报":"自定义")),
+        React.createElement(PipelineStrip),
+        React.createElement("div", {style:{textAlign:"center",marginTop:28}},
+          React.createElement(ActionBtn, {primary:true},"启动分析")
+        )
+      )
+    ),
+
+    /* Navigation */
+    React.createElement("div", {style:{display:"flex",justifyContent:"center",gap:12,marginTop:28}},
+      step>1 && React.createElement(ActionBtn, {onClick:()=>setStep(step-1)},"← 上一步"),
+      step<maxStep && React.createElement(ActionBtn, {primary:true,onClick:()=>setStep(step+1),disabled:(step===1&&!ticker.trim())||(step===2&&!depth)},"下一步 →")
+    )
+  );
+}
+
+/* ═══════════════════════════════════════════
+   Main Layout · 3-Column Comparison
+   ═══════════════════════════════════════════ */
+function App() {
+  return React.createElement("div", null,
+    /* Header */
+    React.createElement("div", {style:{textAlign:"center",padding:"40px 0 28px"}},
+      React.createElement("div", {style:{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--ink-tertiary)",letterSpacing:"0.12em",marginBottom:8}}, "INTERACTION DESIGN · COMPARISON"),
+      React.createElement("h1", {style:{fontFamily:"var(--font-serif)",fontSize:26,fontWeight:700,color:"var(--ink-primary)",letterSpacing:"0.04em",marginBottom:8}}, "新建分析 — 三种交互模式"),
+      React.createElement("p", {style:{fontSize:13,color:"var(--ink-secondary)",maxWidth:560,margin:"0 auto",lineHeight:1.7}}, "同一个功能（输入标的 → 选深度 → 启管线），三种不同的信息组织和用户节奏。点击各变体内部元素可交互，感受实际的操作手感差异。")
+    ),
+
+    /* 3 Columns */
+    React.createElement("div", {style:{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:1,maxWidth:1320,margin:"0 auto",padding:"0 24px 48px"}},
+      React.createElement("div", {style:{background:"var(--bg-surface)",border:"1px solid var(--border-light)"}}, React.createElement(VariantA)),
+      React.createElement("div", {style:{background:"var(--bg-surface)",border:"1px solid var(--border-light)"}}, React.createElement(VariantB)),
+      React.createElement("div", {style:{background:"var(--bg-surface)",border:"1px solid var(--border-light)"}}, React.createElement(VariantC))
+    ),
+
+    /* Footer */
+    React.createElement("div", {style:{textAlign:"center",padding:"0 24px 48px",fontSize:11,color:"var(--ink-tertiary)",lineHeight:1.8}},
+      "设计系统：田中一光式东方秩序 · 和纸暖白底 · 深棕墨 · 朱砂唯一强调色",
+      React.createElement("br"),
+      "所有变体共用同一套 Design Token，差异仅在信息架构和交互节奏"
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>

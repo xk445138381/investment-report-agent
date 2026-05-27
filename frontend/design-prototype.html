@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>研报 Agent · 设计原型</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* ── 田中一光式东方秩序 · 设计 Token ── */
+:root {
+  --bg-warm: #FAF8F5;
+  --bg-surface: #F3F0EC;
+  --bg-elevated: #FFFFFF;
+  --ink-primary: #2D2420;
+  --ink-secondary: #6B5E58;
+  --ink-tertiary: #9E9288;
+  --accent: #C04A1A;
+  --accent-hover: #A03D12;
+  --accent-soft: #F5E6DD;
+  --data-positive: #3D6B4F;
+  --data-negative: #C04A1A;
+  --data-neutral: #9E9288;
+  --border-light: #E8E2DB;
+  --border: #D4C5B9;
+  --font-serif: "Noto Serif SC", "Source Han Serif SC", ui-serif, Georgia, serif;
+  --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+  --font-display: "Playfair Display", "Noto Serif SC", ui-serif, serif;
+  --space-1: 8px; --space-2: 16px; --space-3: 24px;
+  --space-4: 32px; --space-5: 48px; --space-6: 64px; --space-7: 96px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-warm);
+  color: var(--ink-primary);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.8;
+}
+
+/* ── Layout ── */
+.app-shell { display: flex; min-height: 100vh; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 240px; min-width: 240px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-light);
+  display: flex; flex-direction: column;
+  padding: var(--space-4) 0;
+  position: sticky; top: 0; height: 100vh;
+}
+.sidebar-brand {
+  padding: 0 var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: var(--space-3);
+}
+.sidebar-brand h1 {
+  font-family: var(--font-serif);
+  font-size: 20px; font-weight: 700;
+  color: var(--ink-primary);
+  letter-spacing: 0.04em;
+}
+.sidebar-brand p {
+  font-family: var(--font-mono);
+  font-size: 10px; color: var(--ink-tertiary);
+  letter-spacing: 0.12em; text-transform: uppercase;
+  margin-top: 4px;
+}
+.sidebar-nav { flex: 1; padding: 0 var(--space-2); }
+.nav-item {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: 10px var(--space-2); margin-bottom: 2px;
+  font-size: 14px; color: var(--ink-secondary);
+  cursor: pointer; transition: all 0.2s;
+  border-left: 2px solid transparent;
+}
+.nav-item:hover { color: var(--ink-primary); background: rgba(0,0,0,0.03); }
+.nav-item.active {
+  color: var(--accent); font-weight: 500;
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+.nav-item .nav-icon { width: 18px; text-align: center; font-size: 14px; }
+.nav-section {
+  font-family: var(--font-mono);
+  font-size: 10px; color: var(--ink-tertiary);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: var(--space-2) var(--space-2) 6px;
+  margin-top: var(--space-2);
+}
+.sidebar-footer {
+  padding: var(--space-3) var(--space-3) 0;
+  border-top: 1px solid var(--border-light);
+  font-size: 12px; color: var(--ink-tertiary);
+}
+.usage-bar { height: 3px; background: var(--border-light); margin-top: 8px; }
+.usage-fill { height: 100%; background: var(--accent); transition: width 0.5s; }
+
+/* ── Main ── */
+.main-content { flex: 1; overflow-y: auto; }
+
+/* ── Top Bar ── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-2) var(--space-5);
+  background: var(--bg-warm);
+  border-bottom: 1px solid var(--border-light);
+  position: sticky; top: 0; z-index: 10;
+}
+.topbar-breadcrumb { font-size: 13px; color: var(--ink-tertiary); }
+.topbar-breadcrumb span { color: var(--ink-secondary); }
+.topbar-actions { display: flex; gap: var(--space-2); align-items: center; }
+.topbar-btn {
+  padding: 6px 16px; font-size: 13px;
+  background: var(--bg-elevated); color: var(--ink-secondary);
+  border: 1px solid var(--border-light); cursor: pointer;
+  transition: all 0.2s; font-family: var(--font-sans);
+}
+.topbar-btn:hover { border-color: var(--border); color: var(--ink-primary); }
+.topbar-btn.primary {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.topbar-btn.primary:hover { background: var(--accent-hover); }
+
+/* ── Page Content ── */
+.page { padding: var(--space-5); max-width: 1200px; }
+
+/* ── Hero / Command Section ── */
+.hero-section { text-align: center; padding: var(--space-6) 0 var(--space-5); }
+.hero-section h2 {
+  font-family: var(--font-serif); font-size: 32px;
+  font-weight: 700; color: var(--ink-primary);
+  letter-spacing: 0.04em; margin-bottom: var(--space-2);
+}
+.hero-section p {
+  font-size: 16px; color: var(--ink-secondary);
+  max-width: 480px; margin: 0 auto var(--space-4);
+}
+.command-bar {
+  display: flex; align-items: center; gap: var(--space-2);
+  max-width: 640px; margin: 0 auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  padding: 4px 4px 4px var(--space-3);
+  transition: border-color 0.3s;
+}
+.command-bar:focus-within { border-color: var(--accent); }
+.command-bar .prompt { color: var(--ink-tertiary); font-family: var(--font-mono); font-size: 16px; }
+.command-bar input {
+  flex: 1; border: none; outline: none;
+  font-size: 16px; font-family: var(--font-sans);
+  background: transparent; color: var(--ink-primary);
+  padding: 12px 0;
+}
+.command-bar input::placeholder { color: var(--ink-tertiary); }
+.command-bar button {
+  padding: 10px 24px; font-size: 14px; font-weight: 500;
+  background: var(--accent); color: #fff; border: none;
+  cursor: pointer; transition: background 0.2s;
+  font-family: var(--font-sans);
+}
+.command-bar button:hover { background: var(--accent-hover); }
+.command-bar button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Suggestions ── */
+.suggestions { display: flex; justify-content: center; gap: var(--space-2); margin-top: var(--space-3); flex-wrap: wrap; }
+.suggestion-chip {
+  padding: 6px 16px; font-size: 13px;
+  background: var(--bg-surface); color: var(--ink-secondary);
+  border: 1px solid var(--border-light); cursor: pointer;
+  transition: all 0.2s; font-family: var(--font-sans);
+}
+.suggestion-chip:hover { border-color: var(--border); color: var(--ink-primary); }
+
+/* ── Depth Selector ── */
+.depth-section { margin-top: var(--space-5); }
+.depth-section h3 {
+  font-family: var(--font-serif); font-size: 18px;
+  color: var(--ink-primary); margin-bottom: var(--space-3);
+  text-align: center;
+}
+.depth-options { display: flex; gap: var(--space-3); justify-content: center; }
+.depth-card {
+  flex: 0 0 260px; padding: var(--space-3);
+  background: var(--bg-surface); border: 1px solid var(--border-light);
+  cursor: pointer; transition: all 0.25s;
+}
+.depth-card:hover { border-color: var(--border); }
+.depth-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+.depth-card .depth-name {
+  font-family: var(--font-serif); font-size: 16px; font-weight: 600;
+  color: var(--ink-primary); margin-bottom: 4px;
+}
+.depth-card .depth-time {
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-tertiary);
+  margin-bottom: 8px;
+}
+.depth-card .depth-desc { font-size: 13px; color: var(--ink-secondary); line-height: 1.6; }
+.depth-card .depth-agents {
+  margin-top: var(--space-2); font-size: 11px; color: var(--ink-tertiary);
+  font-family: var(--font-mono);
+}
+
+/* ── Agent Pipeline Visualization ── */
+.pipeline-viz { margin-top: var(--space-5); }
+.pipeline-viz h3 {
+  font-family: var(--font-serif); font-size: 18px;
+  color: var(--ink-primary); margin-bottom: var(--space-3);
+  text-align: center;
+}
+.pipeline-phases { display: flex; gap: 0; justify-content: center; align-items: flex-start; }
+.phase-block { flex: 0 0 220px; text-align: center; }
+.phase-connector {
+  display: flex; align-items: center; padding: 0 8px;
+  color: var(--border); font-size: 20px;
+}
+.phase-label {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--ink-tertiary); letter-spacing: 0.08em;
+  margin-bottom: 8px; text-transform: uppercase;
+}
+.phase-title {
+  font-family: var(--font-serif); font-size: 15px; font-weight: 600;
+  color: var(--ink-primary); margin-bottom: 8px;
+}
+.agent-list-inline { display: flex; flex-direction: column; gap: 4px; }
+.agent-tag {
+  padding: 4px 10px; font-size: 11px;
+  background: var(--bg-surface); color: var(--ink-secondary);
+  border: 1px solid var(--border-light);
+  font-family: var(--font-sans);
+}
+
+/* ── Agent Cards Grid ── */
+.agent-grid { margin-top: var(--space-5); }
+.agent-grid h3 {
+  font-family: var(--font-serif); font-size: 16px;
+  color: var(--ink-primary); margin-bottom: var(--space-3);
+  text-align: center;
+}
+.agent-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-2); }
+.agent-card {
+  padding: var(--space-2); background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  transition: all 0.2s;
+}
+.agent-card:hover { border-color: var(--border); }
+.agent-card.active { border-color: var(--accent); background: var(--accent-soft); }
+.agent-card .agent-card-name { font-size: 13px; font-weight: 500; color: var(--ink-primary); margin-bottom: 2px; }
+.agent-card .agent-card-role { font-size: 11px; color: var(--ink-tertiary); font-family: var(--font-mono); }
+.agent-card .agent-card-status { margin-top: 6px; font-size: 11px; }
+
+/* ── Progress View ── */
+.progress-hero { text-align: center; padding: var(--space-5) 0; }
+.progress-hero h2 {
+  font-family: var(--font-serif); font-size: 24px; font-weight: 700;
+  color: var(--ink-primary); margin-bottom: var(--space-1);
+}
+.progress-hero .ticker-display {
+  font-family: var(--font-mono); font-size: 13px; color: var(--ink-tertiary);
+}
+.phase-status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+.phase-status-card {
+  padding: var(--space-3); background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  position: relative;
+}
+.phase-status-card.completed { border-color: var(--data-positive); }
+.phase-status-card.active { border-color: var(--accent); }
+.phase-status-card.pending { opacity: 0.5; }
+.phase-status-card .phase-num {
+  font-family: var(--font-display); font-size: 28px; font-weight: 700;
+  color: var(--ink-primary); opacity: 0.15; position: absolute;
+  top: 8px; right: 12px;
+}
+.phase-status-card .phase-name {
+  font-family: var(--font-serif); font-size: 15px; font-weight: 600;
+  color: var(--ink-primary); margin-bottom: 4px;
+}
+.phase-status-card .phase-status {
+  font-size: 11px; font-family: var(--font-mono);
+  margin-bottom: var(--space-2);
+}
+.phase-status-card .phase-agents { font-size: 12px; color: var(--ink-secondary); line-height: 1.8; }
+.phase-status-card .agent-dot {
+  display: inline-block; width: 6px; height: 6px;
+  margin-right: 6px; vertical-align: middle;
+}
+.agent-dot.done { background: var(--data-positive); }
+.agent-dot.running { background: var(--accent); animation: pulse 1.2s infinite; }
+.agent-dot.waiting { background: var(--border); }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.progress-bar-section { margin-bottom: var(--space-5); }
+.progress-bar-outer {
+  height: 2px; background: var(--border-light);
+  margin-bottom: var(--space-1);
+}
+.progress-bar-inner {
+  height: 100%; background: var(--accent);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.progress-label {
+  display: flex; justify-content: space-between;
+  font-size: 12px; color: var(--ink-tertiary); font-family: var(--font-mono);
+}
+
+/* ── Report Preview ── */
+.report-container {
+  max-width: 780px; margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+}
+.report-cover {
+  text-align: center; padding: var(--space-7) 0 var(--space-5);
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: var(--space-5);
+}
+.report-cover .cover-type {
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-tertiary);
+  letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: var(--space-3);
+}
+.report-cover h1 {
+  font-family: var(--font-serif); font-size: 30px; font-weight: 700;
+  color: var(--ink-primary); letter-spacing: 0.04em; line-height: 1.3;
+  margin-bottom: var(--space-2);
+}
+.report-cover .cover-subtitle {
+  font-family: var(--font-serif); font-size: 17px;
+  color: var(--ink-secondary); margin-bottom: var(--space-4);
+}
+.report-cover .cover-meta {
+  font-size: 13px; color: var(--ink-tertiary);
+  font-family: var(--font-mono);
+}
+
+.rating-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+.rating-card {
+  padding: var(--space-3); text-align: center;
+  background: var(--bg-surface); border: 1px solid var(--border-light);
+}
+.rating-card .rating-label { font-size: 11px; color: var(--ink-tertiary); margin-bottom: 4px; font-family: var(--font-mono); letter-spacing: 0.06em; }
+.rating-card .rating-value { font-family: var(--font-serif); font-size: 20px; font-weight: 600; }
+
+.key-data-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+.key-data-card {
+  padding: var(--space-4); text-align: center;
+  background: var(--bg-surface); border: 1px solid var(--border-light);
+}
+.key-data-card .kd-label {
+  font-size: 11px; color: var(--ink-tertiary);
+  font-family: var(--font-mono); letter-spacing: 0.08em;
+  margin-bottom: var(--space-1);
+}
+.key-data-card .kd-value {
+  font-family: var(--font-display); font-size: 36px; font-weight: 700;
+  color: var(--ink-primary); line-height: 1.2;
+}
+.key-data-card .kd-sub {
+  font-size: 12px; color: var(--ink-tertiary); margin-top: 4px;
+}
+
+.toc-section { border-top: 1px solid var(--border-light); border-bottom: 1px solid var(--border-light); padding: var(--space-4) 0; margin-bottom: var(--space-5); }
+.toc-section h3 { font-family: var(--font-serif); font-size: 16px; font-weight: 600; color: var(--ink-primary); margin-bottom: var(--space-3); }
+.toc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px var(--space-5); }
+.toc-item { font-size: 14px; color: var(--ink-secondary); cursor: pointer; padding: 4px 0; transition: color 0.2s; }
+.toc-item:hover { color: var(--accent); }
+
+.chart-placeholder {
+  padding: var(--space-5); background: var(--bg-surface);
+  border: 1px dashed var(--border); text-align: center;
+  margin-bottom: var(--space-5);
+}
+.chart-placeholder .chart-inner {
+  display: flex; align-items: flex-end; justify-content: center;
+  gap: 12px; height: 120px; padding: 0 var(--space-3);
+}
+.chart-bar {
+  flex: 1; max-width: 48px; background: var(--data-positive);
+  opacity: 0.6; transition: opacity 0.3s;
+}
+.chart-bar:nth-child(2) { height: 55%; }
+.chart-bar:nth-child(3) { height: 70%; }
+.chart-bar:nth-child(4) { height: 85%; }
+.chart-bar:nth-child(5) { height: 100%; background: var(--accent); opacity: 0.8; }
+.chart-bar:nth-child(6) { height: 65%; }
+.chart-bar:nth-child(7) { height: 80%; }
+.chart-placeholder .chart-caption {
+  font-size: 12px; color: var(--ink-tertiary);
+  margin-top: var(--space-3);
+}
+
+.report-disclaimer {
+  text-align: center; font-size: 12px; color: var(--ink-tertiary);
+  padding: var(--space-5) 0;
+}
+
+/* ── Live Log Stream ── */
+.live-log {
+  margin-top: var(--space-5); padding: var(--space-3);
+  background: var(--bg-surface); border: 1px solid var(--border-light);
+  max-height: 240px; overflow-y: auto;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.8;
+}
+.live-log .log-entry { color: var(--ink-secondary); padding: 2px 0; }
+.live-log .log-entry .timestamp { color: var(--ink-tertiary); margin-right: var(--space-2); }
+.live-log .log-entry.highlight { color: var(--accent); }
+
+/* ── Debate mini-view ── */
+.debate-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-4); }
+.debate-card {
+  padding: var(--space-3); background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+}
+.debate-card .debate-side {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.08em; margin-bottom: var(--space-1);
+}
+.debate-card .debate-argument {
+  font-size: 13px; color: var(--ink-secondary); line-height: 1.7;
+  margin-bottom: 6px;
+}
+.debate-card .debate-confidence {
+  font-size: 11px; color: var(--ink-tertiary); font-family: var(--font-mono);
+}
+
+/* ── Tweaks Bar ── */
+.tweaks-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--bg-elevated); border-top: 1px solid var(--border-light);
+  padding: var(--space-2) var(--space-4); display: flex;
+  gap: var(--space-4); align-items: center; z-index: 100;
+  font-size: 12px; color: var(--ink-secondary);
+}
+.tweaks-bar select {
+  padding: 4px 8px; border: 1px solid var(--border-light);
+  font-family: var(--font-sans); font-size: 12px;
+  background: var(--bg-warm); color: var(--ink-primary);
+}
+.tweak-label { font-family: var(--font-mono); font-size: 10px; color: var(--ink-tertiary); letter-spacing: 0.08em; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ── 数据 ── */
+const PIPELINE_PHASES = [
+  {
+    id: "phase1", num: "01", name: "数据聚合", title: "Data Aggregation",
+    agents: ["行情数据", "财报数据", "公告新闻", "宏观行业"]
+  },
+  {
+    id: "phase2", num: "02", name: "深度分析", title: "Deep Analysis",
+    agents: ["财务分析", "估值建模", "行业竞争", "公司治理"]
+  },
+  {
+    id: "phase3", num: "03", name: "多空辩论", title: "Debate",
+    agents: ["多头论点", "空头论点", "风险裁判"]
+  },
+  {
+    id: "phase4", num: "04", name: "统稿排版", title: "Assembly",
+    agents: ["章节撰写", "图表生成", "标题摘要"]
+  }
+];
+
+const DEBATE_MOCK = {
+  bull: [
+    { thesis: "超高 ROE 和宽阔护城河支撑估值溢价", confidence: 85 },
+    { thesis: "直销占比提升将直接推升净利率", confidence: 78 },
+    { thesis: "消费升级趋势下高端白酒需求刚性", confidence: 72 }
+  ],
+  bear: [
+    { thesis: "宏观经济放缓抑制商务消费场景", confidence: 65 },
+    { thesis: "行业监管趋严，政策风险上升", confidence: 60 },
+    { thesis: "当前估值处于历史中高分位", confidence: 70 }
+  ]
+};
+
+/* ── 组件 ── */
+
+function Sidebar({ view, setView }) {
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-brand">
+        <h1>研报 Agent</h1>
+        <p>Investment Research</p>
+      </div>
+
+      <nav className="sidebar-nav">
+        <div className="nav-section">研究</div>
+        <div className={`nav-item ${view === "new" ? "active" : ""}`} onClick={() => setView("new")}>
+          <span className="nav-icon">+</span> 新建分析
+        </div>
+        <div className={`nav-item ${view === "progress" ? "active" : ""}`} onClick={() => setView("progress")}>
+          <span className="nav-icon">◎</span> 分析进度
+        </div>
+        <div className={`nav-item ${view === "report" ? "active" : ""}`} onClick={() => setView("report")}>
+          <span className="nav-icon">☰</span> 最新报告
+        </div>
+
+        <div className="nav-section">历史</div>
+        <div className="nav-item">
+          <span className="nav-icon">↗</span> 报告列表
+        </div>
+        <div className="nav-item">
+          <span className="nav-icon">★</span> 收藏标的
+        </div>
+
+        <div className="nav-section">配置</div>
+        <div className="nav-item">
+          <span className="nav-icon">⚙</span> 模板管理
+        </div>
+        <div className="nav-item">
+          <span className="nav-icon">⚡</span> 模型设置
+        </div>
+      </nav>
+
+      <div className="sidebar-footer">
+        本月用量
+        <div className="usage-bar"><div className="usage-fill" style={{width: "33%"}} /></div>
+        <div style={{marginTop: 4}}>1 / 3 份报告</div>
+      </div>
+    </aside>
+  );
+}
+
+function TopBar({ view, setView, onRun }) {
+  const breadcrumbs = {
+    new: "新建分析",
+    progress: "分析进度 · 贵州茅台",
+    report: "报告预览 · 贵州茅台"
+  };
+  return (
+    <div className="topbar">
+      <div className="topbar-breadcrumb">
+        研报 Agent <span style={{margin: "0 6px"}}>/</span> <span>{breadcrumbs[view]}</span>
+      </div>
+      <div className="topbar-actions">
+        {view === "report" && (
+          <>
+            <button className="topbar-btn">导出 PDF</button>
+            <button className="topbar-btn">导出 Word</button>
+          </>
+        )}
+        {view === "new" && (
+          <button className="topbar-btn primary" onClick={onRun}>开始分析</button>
+        )}
+        {view === "progress" && (
+          <button className="topbar-btn" onClick={() => setView("report")}>查看报告</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── View: New Analysis ── */
+function NewAnalysisView({ onStart }) {
+  const [ticker, setTicker] = useState("");
+  const [depth, setDepth] = useState("deep");
+
+  return (
+    <div className="page">
+      <div className="hero-section">
+        <h2>生成专业投资研究报告</h2>
+        <p>基于多 Agent 协作——数据聚合、深度分析、多空辩论、统稿排版，四阶段管线产出机构级研报。</p>
+
+        <div className="command-bar">
+          <span className="prompt">$</span>
+          <input
+            type="text" value={ticker}
+            onChange={e => setTicker(e.target.value)}
+            placeholder="输入公司名称或股票代码…"
+            onKeyDown={e => e.key === "Enter" && ticker.trim() && onStart(ticker, depth)}
+          />
+          <button
+            onClick={() => ticker.trim() && onStart(ticker, depth)}
+            disabled={!ticker.trim()}
+          >
+            生成报告 →
+          </button>
+        </div>
+
+        <div className="suggestions">
+          {["贵州茅台", "宁德时代", "腾讯控股", "Apple", "自定义..."].map(s => (
+            <button key={s} className="suggestion-chip" onClick={() => setTicker(s)}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 分析深度选择 */}
+      <div className="depth-section">
+        <h3>分析深度</h3>
+        <div className="depth-options">
+          {[
+            { id: "brief", name: "快速简报", time: "约 45 秒", desc: "精简版报告：核心财务、简要估值、关键风险。适合快速扫描。", agents: "6 个 Agent · Quick LLM" },
+            { id: "deep", name: "深度研报", time: "约 2 分钟", desc: "全流程深度分析：四阶段管线、牛熊辩论、完整估值模型。", agents: "14 个 Agent · Deep LLM" },
+            { id: "custom", name: "自定义", time: "按配置决定", desc: "选择 Agent 组合、调整辩论轮次、指定 LLM 模型。完全可控。", agents: "可配置 · 灵活" }
+          ].map(d => (
+            <div
+              key={d.id}
+              className={`depth-card ${depth === d.id ? "selected" : ""}`}
+              onClick={() => setDepth(d.id)}
+            >
+              <div className="depth-name">{d.name}</div>
+              <div className="depth-time">{d.time}</div>
+              <div className="depth-desc">{d.desc}</div>
+              <div className="depth-agents">{d.agents}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Agent 管线预览 */}
+      <div className="pipeline-viz">
+        <h3>分析管线</h3>
+        <div className="pipeline-phases">
+          {PIPELINE_PHASES.map((p, i) => (
+            <React.Fragment key={p.id}>
+              {i > 0 && <div className="phase-connector">→</div>}
+              <div className="phase-block">
+                <div className="phase-label">Phase {p.num}</div>
+                <div className="phase-title">{p.name}</div>
+                <div className="agent-list-inline">
+                  {p.agents.map(a => (
+                    <div key={a} className="agent-tag">{a}</div>
+                  ))}
+                </div>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── View: Progress ── */
+function ProgressView({ ticker, depth }) {
+  const [phase, setPhase] = useState(0);
+  const [logs, setLogs] = useState([]);
+  const [showDebate, setShowDebate] = useState(false);
+
+  useEffect(() => {
+    const phases = [
+      { p: 1, agents: ["行情数据", "财报数据", "公告新闻", "宏观行业"], delay: 600 },
+      { p: 2, agents: ["财务分析", "估值建模", "行业竞争", "公司治理"], delay: 1200 },
+      { p: 3, agents: ["多头论点", "空头论点", "风险裁判"], delay: 1800 },
+      { p: 4, agents: ["章节撰写", "图表生成", "标题摘要"], delay: 2400 }
+    ];
+
+    const timers = [];
+    phases.forEach((ph, i) => {
+      const t = setTimeout(() => {
+        setPhase(i + 1);
+        setLogs(prev => [...prev,
+          `✓ Phase ${ph.p} 完成 — ${ph.agents.join("、")}`,
+        ]);
+        if (ph.p === 3) setShowDebate(true);
+      }, ph.delay);
+      timers.push(t);
+    });
+
+    // Initial log
+    setLogs([`▶ 开始分析 ${ticker || "贵州茅台"} (600519.SH) — ${depth === "deep" ? "深度研报" : "快速简报"}`]);
+
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  const progressPct = phase * 25;
+
+  return (
+    <div className="page">
+      <div className="progress-hero">
+        <h2>{ticker || "贵州茅台"} (600519.SH)</h2>
+        <div className="ticker-display">深度研究报告 · 生成中</div>
+      </div>
+
+      <div className="progress-bar-section">
+        <div className="progress-bar-outer">
+          <div className="progress-bar-inner" style={{width: `${progressPct}%`}} />
+        </div>
+        <div className="progress-label">
+          <span>Phase {phase || 0} / 4</span>
+          <span>{progressPct}%</span>
+        </div>
+      </div>
+
+      <div className="phase-status-grid">
+        {PIPELINE_PHASES.map((p, i) => (
+          <div
+            key={p.id}
+            className={`phase-status-card ${
+              i < phase ? "completed" : i === phase ? "active" : "pending"
+            }`}
+          >
+            <div className="phase-num">{p.num}</div>
+            <div className="phase-name">{p.name}</div>
+            <div className="phase-status" style={{
+              color: i < phase ? "var(--data-positive)" : i === phase ? "var(--accent)" : "var(--ink-tertiary)"
+            }}>
+              {i < phase ? "COMPLETED" : i === phase ? "RUNNING" : "PENDING"}
+            </div>
+            <div className="phase-agents">
+              {p.agents.map(a => {
+                const done = i < phase;
+                const running = i === phase;
+                const waiting = i > phase;
+                return (
+                  <div key={a}>
+                    <span className={`agent-dot ${done ? "done" : running ? "running" : "waiting"}`} />
+                    {a}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 辩论实时预览 */}
+      {showDebate && (
+        <div className="debate-row">
+          <div className="debate-card">
+            <div className="debate-side" style={{color: "var(--data-positive)"}}>BULL CASE · 多头论点</div>
+            {DEBATE_MOCK.bull.map((a, i) => (
+              <div key={i} className="debate-argument">{a.thesis}</div>
+            ))}
+          </div>
+          <div className="debate-card">
+            <div className="debate-side" style={{color: "var(--accent)"}}>BEAR CASE · 空头论点</div>
+            {DEBATE_MOCK.bear.map((a, i) => (
+              <div key={i} className="debate-argument">{a.thesis}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 实时日志 */}
+      <div className="live-log">
+        {logs.map((l, i) => {
+          const ts = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+          return (
+            <div key={i} className={`log-entry ${l.startsWith("✓") ? "" : "highlight"}`}>
+              <span className="timestamp">{ts}</span>
+              {l}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── View: Report ── */
+function ReportView() {
+  return (
+    <div className="report-container">
+      {/* Cover */}
+      <div className="report-cover">
+        <div className="cover-type">Deep Dive Report</div>
+        <h1>贵州茅台 (600519.SH)</h1>
+        <div className="cover-subtitle">护城河坚固，估值具备吸引力</div>
+        <div className="cover-meta">2026年5月17日 · 深度研究报告</div>
+      </div>
+
+      {/* Rating Cards */}
+      <div className="rating-grid">
+        {[
+          { label: "财务健康", value: "优秀", color: "var(--data-positive)" },
+          { label: "估值水平", value: "低估", color: "var(--accent)" },
+          { label: "成长前景", value: "稳健", color: "var(--ink-primary)" },
+          { label: "风险等级", value: "中等", color: "var(--ink-secondary)" }
+        ].map(c => (
+          <div key={c.label} className="rating-card">
+            <div className="rating-label">{c.label}</div>
+            <div className="rating-value" style={{color: c.color}}>{c.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Key Data */}
+      <div className="key-data-row">
+        <div className="key-data-card">
+          <div className="kd-label">当前价格</div>
+          <div className="kd-value">1,680</div>
+          <div className="kd-sub">CNY</div>
+        </div>
+        <div className="key-data-card">
+          <div className="kd-label">加权目标价</div>
+          <div className="kd-value">1,970</div>
+          <div className="kd-sub" style={{color: "var(--accent)"}}>+17.3% 上行空间</div>
+        </div>
+        <div className="key-data-card">
+          <div className="kd-label">综合评级</div>
+          <div className="kd-value" style={{color: "var(--accent)"}}>买入</div>
+          <div className="kd-sub">置信度 72%</div>
+        </div>
+      </div>
+
+      {/* TOC */}
+      <div className="toc-section">
+        <h3>目录</h3>
+        <div className="toc-grid">
+          {[
+            "1. 投资摘要",
+            "2. 公司概况",
+            "3. 行业分析",
+            "4. 财务分析",
+            "5. 估值分析",
+            "6. 风险提示",
+            "7. 投资建议"
+          ].map(s => (
+            <div key={s} className="toc-item">{s}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* Financial Chart Placeholder */}
+      <div className="chart-placeholder">
+        <div className="chart-inner">
+          {[40, 55, 45, 70, 55, 82, 62, 75].map((h, i) => (
+            <div key={i} className="chart-bar" style={{height: `${h}%`}} />
+          ))}
+        </div>
+        <div className="chart-caption">营收/净利润趋势（2019–2025）· 单位：亿元</div>
+      </div>
+
+      {/* Valuation Section */}
+      <div style={{marginBottom: "var(--space-5)"}}>
+        <h3 style={{
+          fontFamily: "var(--font-serif)", fontSize: 18, fontWeight: 600,
+          color: "var(--ink-primary)", marginBottom: "var(--space-3)"
+        }}>
+          估值分析
+        </h3>
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-2)",
+          fontSize: 14, lineHeight: 2
+        }}>
+          <div style={{padding: "var(--space-2)", background: "var(--bg-surface)"}}>
+            <span style={{color: "var(--ink-tertiary)"}}>DCF 三阶段</span>
+            <span style={{float: "right", fontFamily: "var(--font-mono)", fontWeight: 500}}>1,950.00</span>
+          </div>
+          <div style={{padding: "var(--space-2)", background: "var(--bg-surface)"}}>
+            <span style={{color: "var(--ink-tertiary)"}}>Owner Earnings</span>
+            <span style={{float: "right", fontFamily: "var(--font-mono)", fontWeight: 500}}>2,100.00</span>
+          </div>
+          <div style={{padding: "var(--space-2)", background: "var(--bg-surface)"}}>
+            <span style={{color: "var(--ink-tertiary)"}}>EV/EBITDA</span>
+            <span style={{float: "right", fontFamily: "var(--font-mono)", fontWeight: 500}}>1,850.00</span>
+          </div>
+          <div style={{padding: "var(--space-2)", background: "var(--accent-soft)", fontWeight: 600}}>
+            <span style={{color: "var(--accent)"}}>加权目标价</span>
+            <span style={{float: "right", fontFamily: "var(--font-mono)", color: "var(--accent)"}}>1,970.25</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Risk section */}
+      <div style={{marginBottom: "var(--space-5)"}}>
+        <h3 style={{
+          fontFamily: "var(--font-serif)", fontSize: 18, fontWeight: 600,
+          color: "var(--ink-primary)", marginBottom: "var(--space-3)"
+        }}>
+          风险提示
+        </h3>
+        <div style={{fontSize: 14, color: "var(--ink-secondary)", lineHeight: 1.9}}>
+          <p>核心风险：消费降级趋势下高端白酒需求持续下滑；行业监管趋严，政策风险上升；白酒消费场景受宏观经济放缓抑制。</p>
+          <p style={{marginTop: "var(--space-2)"}}>核心机遇：直销占比提升将直接推升净利率；消费升级趋势下高端白酒需求刚性；品牌壁垒为行业最强，消费者价格弹性极低。</p>
+        </div>
+      </div>
+
+      {/* Disclaimer */}
+      <div className="report-disclaimer">
+        AI 辅助生成 · 仅供参考 · 不构成投资建议<br/>
+        Generated by 研报 Agent · Research Platform
+      </div>
+    </div>
+  );
+}
+
+/* ── App Root ── */
+function App() {
+  const [view, setView] = useState("new");
+  const [analysisParams, setAnalysisParams] = useState(null);
+
+  const handleStart = (ticker, depth) => {
+    setAnalysisParams({ ticker, depth });
+    setView("progress");
+  };
+
+  return (
+    <div className="app-shell">
+      <Sidebar view={view} setView={setView} />
+      <div className="main-content">
+        <TopBar view={view} setView={setView} onRun={() => {
+          if (analysisParams) setView("progress");
+          else handleStart("贵州茅台", "deep");
+        }} />
+
+        {view === "new" && <NewAnalysisView onStart={handleStart} />}
+        {view === "progress" && (
+          <ProgressView
+            ticker={analysisParams?.ticker}
+            depth={analysisParams?.depth}
+          />
+        )}
+        {view === "report" && <ReportView />}
+
+        {/* Tweaks bar */}
+        <div className="tweaks-bar">
+          <span className="tweak-label">原型变体</span>
+          <select value={view} onChange={e => setView(e.target.value)}>
+            <option value="new">新建分析</option>
+            <option value="progress">分析进度</option>
+            <option value="report">报告预览</option>
+          </select>
+          <span style={{marginLeft: 16}} className="tweak-label">提示</span>
+          <span style={{fontSize: 11, color: "var(--ink-tertiary)"}}>
+            点击左侧导航切换视图 · 在「新建分析」输入股票代码后点「生成报告」看进度动画
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
-type Depth = "brief" | "deep" | "custom";
+type Depth = "brief" | "deep" | "custom" | "value";
 
 const PIPELINE_PHASES = [
   { id: "p1", num: "01", name: "数据聚合", agents: ["行情数据", "财报数据", "公告新闻", "宏观行业"] },
@@ -12,17 +12,26 @@ const PIPELINE_PHASES = [
   { id: "p4", num: "04", name: "统稿排版", agents: ["章节撰写", "图表生成", "标题摘要"] },
 ];
 
+const VALUE_PIPELINE_PHASES = [
+  { id: "v1", num: "01", name: "数据聚合", agents: ["行情数据", "财报数据", "公告新闻", "宏观行业"] },
+  { id: "v2", num: "02", name: "财务分析", agents: ["财务分析", "估值建模", "行业竞争", "公司治理"] },
+  { id: "v3", num: "03", name: "价值评估", agents: ["段永平视角", "芒格视角", "综合裁决"] },
+  { id: "v4", num: "04", name: "统稿排版", agents: ["章节撰写", "图表生成", "标题摘要"] },
+];
+
 const ALL_AGENTS = PIPELINE_PHASES.flatMap((p) => p.agents);
 
 const SUGGESTIONS = ["贵州茅台", "宁德时代", "AAPL", "五粮液", "MSFT", "恒瑞医药"];
 
-const DEPTHS: { id: Depth; name: string; time: string; desc: string }[] = [
-  { id: "brief", name: "快速简报", time: "约 45s", desc: "精简版：核心财务 + 简要估值 + 关键风险。6 Agent 管线。" },
-  { id: "deep", name: "深度研报", time: "约 2min", desc: "全流程分析：四阶段管线、牛熊辩论、完整估值模型。14 Agent。" },
-  { id: "custom", name: "自定义", time: "按配置", desc: "自由选择 Agent 组合、调整辩论轮次、指定 LLM 模型。" },
+const DEPTHS: { id: Depth; name: string; time: string; desc: string; template: string }[] = [
+  { id: "value", name: "价值投资", time: "约 3min", desc: "段永平×芒格双重视角：商业模式 + 本分 + 逆向风险 + Yes/No/Too Hard 判定。8 章。", template: "value_investor" },
+  { id: "deep", name: "深度研报", time: "约 2min", desc: "全流程分析：四阶段管线、牛熊辩论、完整估值模型。14 Agent。", template: "deep_dive_default" },
+  { id: "brief", name: "快速简报", time: "约 45s", desc: "精简版：核心财务 + 简要估值 + 关键风险。6 Agent 管线。", template: "deep_dive_default" },
+  { id: "custom", name: "自定义", time: "按配置", desc: "自由选择 Agent 组合、调整辩论轮次、指定 LLM 模型。", template: "deep_dive_default" },
 ];
 
 const TEMPLATES = [
+  { id: "value_investor", name: "价值投资（段永平+芒格）", desc: "8 章节：商业模式→本分→财务→估值→逆向→裁决→判定" },
   { id: "default", name: "深度研报（默认）", desc: "7 章节，10 图表" },
   { id: "brief_tpl", name: "快速简报", desc: "4 章节，4 图表" },
   { id: "cn_equity", name: "A 股专用", desc: "含行业对标、政策分析" },
@@ -39,7 +48,8 @@ export default function HomePage() {
 
   const handleStart = useCallback(() => {
     if (!ticker.trim()) return;
-    router.push(`/progress?ticker=${encodeURIComponent(ticker)}&depth=${depth}`);
+    const tpl = DEPTHS.find(d => d.id === depth)?.template || "deep_dive_default";
+    router.push(`/progress?ticker=${encodeURIComponent(ticker)}&depth=${depth}&template=${tpl}`);
   }, [ticker, depth, router]);
 
   const toggleAgent = (name: string) => {
@@ -272,7 +282,7 @@ export default function HomePage() {
 
       {/* Pipeline preview */}
       <div className="flex items-start justify-center gap-0 mt-8">
-        {PIPELINE_PHASES.map((p, i) => (
+        {(depth === "value" ? VALUE_PIPELINE_PHASES : PIPELINE_PHASES).map((p, i) => (
           <div key={p.id} className="flex items-start gap-0">
             {i > 0 && <div className="px-1 py-2 text-xs text-border">→</div>}
             <div className="text-center w-16">

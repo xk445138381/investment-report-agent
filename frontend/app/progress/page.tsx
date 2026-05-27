@@ -11,9 +11,22 @@ const INITIAL_PHASES = [
   { id: "p4", num: "04", name: "统稿排版", agents: ["章节撰写","图表生成","标题摘要"] },
 ];
 
+const VALUE_PHASES = [
+  { id: "v1", num: "01", name: "数据聚合", agents: ["行情数据","财报数据","公告新闻","宏观行业"] },
+  { id: "v2", num: "02", name: "财务分析", agents: ["财务分析","估值建模","行业竞争","公司治理"] },
+  { id: "v3", num: "03", name: "价值评估", agents: ["段永平视角","芒格视角"] },
+  { id: "v3b", num: "03b", name: "综合裁决", agents: ["双视角裁决官"] },
+  { id: "v4", num: "04", name: "统稿排版", agents: ["章节撰写","图表生成","标题摘要"] },
+];
+
 const DEBATE = {
   bull: ["超高 ROE (28.5%) 和宽阔护城河支撑估值溢价","直销占比提升将直接推升净利率 5.2%","消费升级趋势下高端白酒需求刚性"],
   bear: ["宏观经济放缓抑制商务消费场景","行业监管趋严，消费税改革风险上升","当前 PE 处于近 5 年 72% 分位"],
+};
+
+const VALUE_DEBATE = {
+  duan: ["商业模式清晰度：这个生意怎么赚钱？十年后还能赚钱吗？","企业文化与本分：管理层在做对的事吗？","现金流确定性：利润里有几分真金白银？"],
+  munger: ["反过来想：这笔投资最可能怎么死？","Lollapalooza 检测：多种风险因子同时发力的场景","激励机制诊断：管理层与股东利益对齐吗？"],
 };
 
 function ProgressContent() {
@@ -21,6 +34,9 @@ function ProgressContent() {
   const router = useRouter();
   const ticker = params.get("ticker") || "贵州茅台";
   const depth = params.get("depth") || "deep";
+  const template = params.get("template") || "deep_dive_default";
+  const isValue = template === "value_investor";
+  const phases = isValue ? VALUE_PHASES : INITIAL_PHASES;
 
   const [phase, setPhase] = useState(0);
   const [logs, setLogs] = useState<string[]>([`▶ 开始分析 ${ticker}…`]);
@@ -41,7 +57,7 @@ function ProgressContent() {
     (async () => {
       // Try real backend first
       try {
-        const res = await generateReport({ ticker, report_type: depth as "deep_dive" | "brief" });
+        const res = await generateReport({ ticker, report_type: depth as "deep_dive" | "brief", template_id: template });
         setLogs((prev) => [...prev, `✓ 分析任务启动: ${res.task_id.slice(0, 8)}…`]);
         setMode("real");
 
@@ -108,8 +124,8 @@ function ProgressContent() {
       </div>
 
       {/* Phase cards */}
-      <div className="grid grid-cols-4 gap-2.5 mb-7">
-        {INITIAL_PHASES.map((p, i) => (
+      <div className={`grid gap-2.5 mb-7 ${isValue ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        {phases.map((p, i) => (
           <div key={p.id} className={`p-3.5 relative ${
             i < phase ? "bg-bg-surface border border-data-positive" :
             i === phase ? "bg-accent-soft border border-accent" :
@@ -132,16 +148,24 @@ function ProgressContent() {
         ))}
       </div>
 
-      {/* Debate */}
+      {/* Debate / Value Perspectives */}
       {showDebate && (
         <div className="grid grid-cols-2 gap-2.5 mb-7 animate-[slideIn_0.3s_ease]">
           <div className="p-3.5 bg-bg-surface border border-border-light">
-            <div className="text-[10px] font-mono text-data-positive tracking-[0.06em] mb-2">BULL CASE</div>
-            {DEBATE.bull.map((t, i) => <div key={i} className="text-xs text-ink-secondary mb-1.5 leading-relaxed">· {t}</div>)}
+            <div className="text-[10px] font-mono text-data-positive tracking-[0.06em] mb-2">
+              {isValue ? "段永平视角" : "BULL CASE"}
+            </div>
+            {(isValue ? VALUE_DEBATE.duan : DEBATE.bull).map((t, i) => (
+              <div key={i} className="text-xs text-ink-secondary mb-1.5 leading-relaxed">· {t}</div>
+            ))}
           </div>
           <div className="p-3.5 bg-bg-surface border border-border-light">
-            <div className="text-[10px] font-mono text-accent tracking-[0.06em] mb-2">BEAR CASE</div>
-            {DEBATE.bear.map((t, i) => <div key={i} className="text-xs text-ink-secondary mb-1.5 leading-relaxed">· {t}</div>)}
+            <div className="text-[10px] font-mono text-accent tracking-[0.06em] mb-2">
+              {isValue ? "芒格视角" : "BEAR CASE"}
+            </div>
+            {(isValue ? VALUE_DEBATE.munger : DEBATE.bear).map((t, i) => (
+              <div key={i} className="text-xs text-ink-secondary mb-1.5 leading-relaxed">· {t}</div>
+            ))}
           </div>
         </div>
       )}

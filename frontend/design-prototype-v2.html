@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>研报 Agent · 设计原型 v2</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-warm: #FAF8F5; --bg-surface: #F3F0EC; --bg-elevated: #FFFFFF;
+  --ink-primary: #2D2420; --ink-secondary: #6B5E58; --ink-tertiary: #9E9288;
+  --accent: #C04A1A; --accent-hover: #A03D12; --accent-soft: #F5E6DD;
+  --data-positive: #3D6B4F; --border-light: #E8E2DB; --border: #D4C5B9;
+  --data-series-1: #2D2420; --data-series-2: #C04A1A; --data-series-3: #6B5E58; --data-series-4: #D4C5B9; --data-series-5: #3D6B4F;
+  --font-serif: "Noto Serif SC", ui-serif, serif;
+  --font-sans: "Noto Sans SC", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Playfair Display", "Noto Serif SC", ui-serif, serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans); background: var(--bg-warm);
+  color: var(--ink-primary); -webkit-font-smoothing: antialiased;
+  line-height: 1.8; overflow: hidden;
+}
+input:focus, select:focus, button:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+::selection { background: var(--accent-soft); color: var(--ink-primary); }
+@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.25 } }
+@keyframes slideIn { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+/* ═══════════════════ DATA ═══════════════════ */
+const PIPELINE_PHASES = [
+  { id:"p1",num:"01",name:"数据聚合",title:"Data Aggregation",agents:[{n:"行情数据",s:"done"},{n:"财报数据",s:"done"},{n:"公告新闻",s:"done"},{n:"宏观行业",s:"done"}] },
+  { id:"p2",num:"02",name:"深度分析",title:"Deep Analysis",agents:[{n:"财务分析",s:"done"},{n:"估值建模",s:"done"},{n:"行业竞争",s:"done"},{n:"公司治理",s:"running"}] },
+  { id:"p3",num:"03",name:"多空辩论",title:"Debate",agents:[{n:"多头论点",s:"pending"},{n:"空头论点",s:"pending"},{n:"风险裁判",s:"pending"}] },
+  { id:"p4",num:"04",name:"统稿排版",title:"Assembly",agents:[{n:"章节撰写",s:"pending"},{n:"图表生成",s:"pending"},{n:"标题摘要",s:"pending"}] },
+];
+const SUGGESTIONS = ["贵州茅台","宁德时代","腾讯控股","Apple","五粮液","恒瑞医药"];
+const NAV_ITEMS = [
+  { section:"研究", items:[{id:"new",label:"新建分析",icon:"+"},{id:"reports",label:"报告列表",icon:"☰"}] },
+  { section:"工具", items:[{id:"templates",label:"模板管理",icon:"⚙"}] },
+  { section:"系统", items:[{id:"settings",label:"模型与配置",icon:"⚡"}] },
+];
+const DEBATE_MOCK = {
+  bull:["超高 ROE (28.5%) 和宽阔护城河支撑估值溢价","直销占比提升将直接推升净利率 5.2%","消费升级趋势下高端白酒需求刚性"],
+  bear:["宏观经济放缓抑制商务消费场景，Q1 数据已显疲态","行业监管趋严，白酒消费税改革风险上升","当前 PE 处于近 5 年 72% 分位，估值不便宜"],
+};
+
+/* ═══════════════════ COMPONENTS ═══════════════════ */
+
+function Sidebar({ view, setView, usagePct }) {
+  const [hovered, setHovered] = useState(null);
+  return React.createElement("aside", {style:{width:200,minWidth:200,background:"var(--bg-surface)",borderRight:"1px solid var(--border-light)",display:"flex",flexDirection:"column",padding:"24px 0",height:"100vh",overflowY:"auto"}},
+    React.createElement("div", {style:{padding:"0 20px 20px",borderBottom:"1px solid var(--border-light)",marginBottom:16}},
+      React.createElement("div", {style:{fontFamily:"var(--font-serif)",fontSize:18,fontWeight:700,color:"var(--ink-primary)",letterSpacing:"0.04em"}},"研报 Agent"),
+      React.createElement("div", {style:{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--ink-tertiary)",letterSpacing:"0.1em",marginTop:2}},"RESEARCH PLATFORM")
+    ),
+    React.createElement("nav", {style:{flex:1}},
+      NAV_ITEMS.map(group=>React.createElement("div",{key:group.section},
+        React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--ink-tertiary)",letterSpacing:"0.08em",padding:"12px 20px 6px"}},group.section),
+        group.items.map(item=>React.createElement("div",{key:item.id,onClick:()=>setView(item.id),onMouseEnter:()=>setHovered(item.id),onMouseLeave:()=>setHovered(null),style:{display:"flex",alignItems:"center",gap:10,padding:"8px 20px",fontSize:13,color:view===item.id?"var(--accent)":"var(--ink-secondary)",cursor:"pointer",borderLeft: view===item.id ? "2px solid var(--accent)" : "2px solid transparent",background: view===item.id ? "var(--accent-soft)" : hovered===item.id ? "rgba(0,0,0,0.03)" : "transparent",fontWeight: view===item.id ? 500 : 400,transition:"all 0.15s"}},
+          React.createElement("span",{style:{width:16,textAlign:"center",fontSize:13}},item.icon),
+          item.label
+        ))
+      ))
+    ),
+    React.createElement("div",{style:{padding:"16px 20px 0",borderTop:"1px solid var(--border-light)",fontSize:11,color:"var(--ink-tertiary)"}},
+      React.createElement("div",null,"本月用量"),
+      React.createElement("div",{style:{height:3,background:"var(--border-light)",marginTop:6}},React.createElement("div",{style:{height:"100%",background:"var(--accent)",width:usagePct+"%",transition:"width 0.5s"}})),
+      React.createElement("div",{style:{marginTop:4,fontFamily:"var(--font-mono)",fontSize:10}},"1 / 3 份报告")
+    )
+  );
+}
+
+function TopBar({ view, setView, onStartAnalysis }) {
+  const labels = {new:"新建分析",reports:"报告列表",templates:"模板管理",settings:"模型与配置"};
+  return React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 32px",background:"var(--bg-warm)",borderBottom:"1px solid var(--border-light)",position:"sticky",top:0,zIndex:10}},
+    React.createElement("div",{style:{fontSize:13,color:"var(--ink-tertiary)"}},
+      "研报 Agent ",React.createElement("span",{style:{margin:"0 6px"}},"/")," ",React.createElement("span",{style:{color:"var(--ink-secondary)"}},labels[view]||"")
+    ),
+    React.createElement("div",{style:{display:"flex",gap:10,alignItems:"center"}},
+      view==="new" && React.createElement("button",{onClick:onStartAnalysis,style:{padding:"7px 18px",fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"var(--font-sans)",border:"none",background:"var(--accent)",color:"#fff",transition:"background 0.2s"},onMouseEnter:e=>e.target.style.background="var(--accent-hover)",onMouseLeave:e=>e.target.style.background="var(--accent)"},"开始分析"),
+      view==="reports" && React.createElement("button",{style:{padding:"7px 16px",fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"var(--font-sans)",border:"1px solid var(--border-light)",background:"var(--bg-surface)",color:"var(--ink-secondary)"}},"刷新")
+    )
+  );
+}
+
+/* ── View: New Analysis ── */
+function NewAnalysisView({ onStart }) {
+  const [ticker, setTicker] = useState("");
+  const [depth, setDepth] = useState("deep");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [template, setTemplate] = useState("default");
+  const [selectedAgents, setSelectedAgents] = useState(ALL_AGENT_NAMES);
+
+  const depths = [
+    {id:"brief",n:"快速简报",t:"~45s",d:"精简版：核心财务+简要估值+关键风险。6 Agent 管线。"},
+    {id:"deep",n:"深度研报",t:"~2min",d:"全流程分析：四阶段管线、牛熊辩论、完整估值模型。14 Agent。"},
+    {id:"custom",n:"自定义",t:"按配置",d:"自由选择 Agent 组合、调整辩论轮次、指定 LLM 模型。"},
+  ];
+
+  const templates = [
+    {id:"default",n:"深度研报（默认）",d:"7 章节，10 图表"},
+    {id:"brief",n:"快速简报",d:"4 章节，4 图表"},
+    {id:"cn_equity",n:"A 股专用",d:"含行业对标、政策分析"},
+  ];
+
+  return React.createElement("div",{style:{maxWidth:720,margin:"0 auto",padding:"48px 32px",animation:"slideIn 0.4s ease"}},
+    /* Hero */
+    React.createElement("div",{style:{textAlign:"center",marginBottom:40}},
+      React.createElement("h2",{style:{fontFamily:"var(--font-serif)",fontSize:28,fontWeight:700,color:"var(--ink-primary)",letterSpacing:"0.04em",marginBottom:8}},"生成专业投资研究报告"),
+      React.createElement("p",{style:{fontSize:14,color:"var(--ink-secondary)",maxWidth:420,margin:"0 auto",lineHeight:1.7}},"多 Agent 协作 — 数据聚合、深度分析、多空辩论、统稿排版，四阶段管线产出机构级研报。")
+    ),
+
+    /* Command bar */
+    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,maxWidth:520,margin:"0 auto",background:"var(--bg-elevated)",border:"1px solid",borderColor: ticker?"var(--accent)":"var(--border-light)",padding:"3px 3px 3px 16px",transition:"border-color 0.3s"}},
+      React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:15,color:"var(--ink-tertiary)"}},"$"),
+      React.createElement("input",{type:"text",value:ticker,onChange:e=>setTicker(e.target.value),placeholder:"输入公司名称或股票代码…",autoFocus:true,style:{flex:1,border:"none",outline:"none",fontSize:14,fontFamily:"var(--font-sans)",background:"transparent",color:"var(--ink-primary)",padding:"10px 0"}}),
+      React.createElement("button",{onClick:()=>ticker.trim()&&onStart(ticker,depth,showAdvanced?{template,agents:selectedAgents}:null),disabled:!ticker.trim(),style:{padding:"8px 22px",fontSize:13,fontWeight:500,cursor:ticker.trim()?"pointer":"not-allowed",fontFamily:"var(--font-sans)",border:"none",background:ticker.trim()?"var(--accent)":"var(--border-light)",color:ticker.trim()?"#fff":"var(--ink-tertiary)",opacity:ticker.trim()?1:0.5}},"生成报告 →")
+    ),
+
+    /* Suggestions */
+    React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:6,marginTop:12,flexWrap:"wrap"}},
+      SUGGESTIONS.map(s=>React.createElement("button",{key:s,onClick:()=>setTicker(s),style:{padding:"4px 14px",fontSize:11,fontFamily:"var(--font-sans)",background:"var(--bg-surface)",color:"var(--ink-secondary)",border:"1px solid var(--border-light)",cursor:"pointer",transition:"all 0.15s"},onMouseEnter:e=>{e.target.style.borderColor="var(--border)";e.target.style.color="var(--ink-primary)"},onMouseLeave:e=>{e.target.style.borderColor="var(--border-light)";e.target.style.color="var(--ink-secondary)"}},s))
+    ),
+
+    /* Depth selector */
+    React.createElement("div",{style:{marginTop:32}},
+      React.createElement("div",{style:{textAlign:"center",fontFamily:"var(--font-serif)",fontSize:15,color:"var(--ink-primary)",marginBottom:14,fontWeight:600}},"分析深度"),
+      React.createElement("div",{style:{display:"flex",gap:10,justifyContent:"center"}},
+        depths.map(d=>React.createElement("div",{key:d.id,onClick:()=>setDepth(d.id),style:{padding:"14px 16px",width:200,cursor:"pointer",transition:"all 0.2s",background:depth===d.id?"var(--accent-soft)":"var(--bg-surface)",border:depth===d.id?"1px solid var(--accent)":"1px solid var(--border-light)"}},
+          React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:14,fontWeight:600,color:"var(--ink-primary)",marginBottom:4}},d.n),
+          React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--ink-tertiary)",marginBottom:6}},d.t),
+          React.createElement("div",{style:{fontSize:11,color:"var(--ink-secondary)",lineHeight:1.5}},d.d)
+        ))
+      )
+    ),
+
+    /* Advanced toggle */
+    React.createElement("div",{style:{textAlign:"center",marginTop:24}},
+      React.createElement("button",{onClick:()=>setShowAdvanced(!showAdvanced),style:{fontSize:12,color:"var(--ink-tertiary)",cursor:"pointer",background:"none",border:"none",fontFamily:"var(--font-sans)",padding:"4px 0",transition:"color 0.2s"},onMouseEnter:e=>e.target.style.color="var(--accent)",onMouseLeave:e=>e.target.style.color="var(--ink-tertiary)"},
+        showAdvanced ? "收起高级配置 ▲" : "高级配置… ▼"
+      )
+    ),
+
+    /* Advanced: stepped wizard */
+    showAdvanced && React.createElement("div",{style:{marginTop:20,padding:"24px",background:"var(--bg-surface)",border:"1px solid var(--border-light)",animation:"slideIn 0.3s ease"}},
+      /* Steps */
+      React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:0,marginBottom:24}},
+        [{n:1,t:"模板"},{n:2,t:"Agent"},{n:3,t:"参数"}].map((s,i)=>React.createElement(React.Fragment,{key:s.n},
+          i>0 && React.createElement("div",{style:{width:36,height:1,background:wizardStep>i?"var(--accent)":"var(--border-light)"}}),
+          React.createElement("div",{style:{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font-mono)",fontSize:11,fontWeight:500,background:wizardStep>=s.n?"var(--accent)":"var(--bg-surface)",color:wizardStep>=s.n?"#fff":"var(--ink-tertiary)",border:wizardStep>=s.n?"none":"1px solid var(--border-light)"}},wizardStep>s.n?"✓":s.n),
+          React.createElement("div",{style:{fontSize:10,marginLeft:6,color:wizardStep>=s.n?"var(--ink-primary)":"var(--ink-tertiary)",fontWeight:wizardStep===s.n?600:400}},s.t)
+        ))
+      ),
+
+      /* Step 1: template */
+      wizardStep===1 && templates.map(t=>React.createElement("div",{key:t.id,onClick:()=>{setTemplate(t.id);setWizardStep(2)},style:{padding:"12px 16px",marginBottom:6,cursor:"pointer",background:template===t.id?"var(--accent-soft)":"var(--bg-elevated)",border:template===t.id?"1px solid var(--accent)":"1px solid var(--border-light)",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        React.createElement("div",null,React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:13,fontWeight:600,color:"var(--ink-primary)"}},t.n),React.createElement("div",{style:{fontSize:11,color:"var(--ink-secondary)",marginTop:2}},t.d)),
+        React.createElement("div",{style:{fontSize:11,color:"var(--ink-tertiary)",fontFamily:"var(--font-mono)"}},template===t.id?"✓":"")
+      )),
+
+      /* Step 2: agents */
+      wizardStep===2 && React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:12,color:"var(--ink-secondary)",marginBottom:12,textAlign:"center"}},"勾选要运行的 Agent（默认全选）"),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,marginBottom:14}},
+          PIPELINE_PHASES.map(p=>React.createElement(React.Fragment,{key:p.id},
+            React.createElement("div",{style:{gridColumn:"1/-1",fontSize:10,color:"var(--ink-tertiary)",marginTop:6,fontFamily:"var(--font-mono)"}},"Phase "+p.num+" · "+p.name),
+            p.agents.map(a=>React.createElement("label",{key:a.n,style:{display:"flex",alignItems:"center",gap:6,padding:"3px 6px",fontSize:11,cursor:"pointer",color:"var(--ink-secondary)",fontFamily:"var(--font-sans)",background:selectedAgents.includes(a.n)?"var(--accent-soft)":"transparent"}},
+              React.createElement("input",{type:"checkbox",checked:selectedAgents.includes(a.n),onChange:()=>setSelectedAgents(prev=>prev.includes(a.n)?prev.filter(x=>x!==a.n):[...prev,a.n]),style:{accentColor:"var(--accent)"}}),a.n
+            ))
+          ))
+        )
+      ),
+
+      /* Step 3: params */
+      wizardStep===3 && React.createElement("div",{style:{textAlign:"center"}},
+        React.createElement("div",{style:{fontSize:12,color:"var(--ink-secondary)",marginBottom:16}},"配置摘要"),
+        React.createElement("div",{style:{fontSize:13,color:"var(--ink-primary)",background:"var(--bg-elevated)",padding:"12px",border:"1px solid var(--border-light)",marginBottom:4,textAlign:"left"}},
+          React.createElement("div",null,"模板：",React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:11}},template)),React.createElement("br"),
+          React.createElement("div",null,"Agent：",React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:11}},selectedAgents.length+" / "+ALL_AGENT_NAMES.length)),React.createElement("br"),
+          React.createElement("div",null,"LLM：",React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:11}},"DeepSeek V4 Pro"))
+        ),
+        React.createElement("div",{style:{marginTop:16,fontSize:11,color:"var(--ink-tertiary)"}},"准备好后关闭高级配置，点击命令栏「生成报告」启动。"),
+      ),
+
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:10,marginTop:16}},
+        wizardStep>1 && React.createElement("button",{onClick:()=>setWizardStep(wizardStep-1),style:{padding:"6px 16px",fontSize:11,cursor:"pointer",fontFamily:"var(--font-sans)",border:"1px solid var(--border-light)",background:"var(--bg-elevated)",color:"var(--ink-secondary)"}},"← 上一步"),
+        wizardStep<3 && React.createElement("button",{onClick:()=>setWizardStep(wizardStep+1),style:{padding:"6px 20px",fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"var(--font-sans)",border:"none",background:"var(--accent)",color:"#fff"}},"下一步 →")
+      )
+    )
+  );
+}
+const ALL_AGENT_NAMES = PIPELINE_PHASES.flatMap(p=>p.agents.map(a=>a.n));
+
+/* ── View: Progress ── */
+function ProgressView({ ticker, depth, onComplete }) {
+  const [phase, setPhase] = useState(0);
+  const [logs, setLogs] = useState([]);
+  const [showDebate, setShowDebate] = useState(false);
+  const [started, setStarted] = useState(false);
+
+  useEffect(()=>{
+    if(started) return;
+    setStarted(true);
+    setLogs(["▶ 开始分析 "+(ticker||"贵州茅台")+" (600519.SH) — "+(depth==="deep"?"深度研报":"快速简报")]);
+    const schedule = [
+      {p:1,agents:"行情数据、财报数据、公告新闻、宏观行业",d:500},
+      {p:2,agents:"财务分析、估值建模、行业竞争、公司治理",d:1200},
+      {p:3,agents:"多头论点、空头论点、风险裁判",d:2000},
+      {p:4,agents:"章节撰写、图表生成、标题摘要",d:2800},
+    ];
+    const timers = schedule.map(s=>setTimeout(()=>{
+      setPhase(s.p); setLogs(prev=>[...prev,"✓ Phase "+s.p+" 完成 — "+s.agents]);
+      if(s.p===3) setShowDebate(true);
+      if(s.p===4) setTimeout(onComplete, 400);
+    },s.d));
+    return ()=>timers.forEach(clearTimeout);
+  },[]);
+
+  return React.createElement("div",{style:{maxWidth:780,margin:"0 auto",padding:"48px 32px",animation:"slideIn 0.4s ease"}},
+    React.createElement("div",{style:{textAlign:"center",marginBottom:32}},
+      React.createElement("div",{style:{fontFamily:"var(--font-display)",fontSize:36,fontWeight:700,color:"var(--ink-primary)",lineHeight:1.2}},(ticker||"茅台")),
+      React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:12,color:"var(--ink-tertiary)",marginTop:4}},"600519.SH · "+depth)
+    ),
+
+    /* Progress bar */
+    React.createElement("div",{style:{marginBottom:28}},
+      React.createElement("div",{style:{height:2,background:"var(--border-light)"}},React.createElement("div",{style:{height:"100%",background:"var(--accent)",width:(phase*25)+"%",transition:"width 0.6s cubic-bezier(0.4,0,0.2,1)"}})),
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:11,color:"var(--ink-tertiary)",fontFamily:"var(--font-mono)",marginTop:6}},
+        React.createElement("span",null,"Phase "+phase+" / 4"),React.createElement("span",null,phase*25+"%")
+      )
+    ),
+
+    /* Phase cards */
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:10,marginBottom:28}},
+      PIPELINE_PHASES.map((p,i)=>{
+        const done=i<phase, active=i===phase;
+        return React.createElement("div",{key:p.id,style:{padding:14,background:done?"var(--bg-surface)":active?"var(--accent-soft)":"var(--bg-surface)",border:done?"1px solid var(--data-positive)":active?"1px solid var(--accent)":"1px solid var(--border-light)",opacity: i>phase ? 0.4 : 1,position:"relative"}},
+          React.createElement("div",{style:{fontFamily:"var(--font-display)",fontSize:24,fontWeight:700,color:"var(--ink-primary)",opacity:0.1,position:"absolute",top:4,right:8}},p.num),
+          React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:13,fontWeight:600,color:"var(--ink-primary)",marginBottom:6}},p.name),
+          p.agents.map(a=>React.createElement("div",{key:a.n,style:{fontSize:10,color:"var(--ink-secondary)",marginBottom:2,display:"flex",alignItems:"center",gap:6}},
+            React.createElement("span",{style:{display:"inline-block",width:5,height:5,background:active?"var(--accent)":done?"var(--data-positive)":"var(--border)",animation:active?"pulse 1.2s infinite":""}}),
+            a.n
+          ))
+        );
+      })
+    ),
+
+    /* Debate */
+    showDebate && React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:28,animation:"slideIn 0.3s ease"}},
+      React.createElement("div",{style:{padding:14,background:"var(--bg-surface)",border:"1px solid var(--border-light)"}},
+        React.createElement("div",{style:{fontSize:10,fontFamily:"var(--font-mono)",color:"var(--data-positive)",letterSpacing:"0.06em",marginBottom:8}},"BULL CASE"),
+        DEBATE_MOCK.bull.map((t,i)=>React.createElement("div",{key:i,style:{fontSize:12,color:"var(--ink-secondary)",marginBottom:6,lineHeight:1.6}},"· "+t))
+      ),
+      React.createElement("div",{style:{padding:14,background:"var(--bg-surface)",border:"1px solid var(--border-light)"}},
+        React.createElement("div",{style:{fontSize:10,fontFamily:"var(--font-mono)",color:"var(--accent)",letterSpacing:"0.06em",marginBottom:8}},"BEAR CASE"),
+        DEBATE_MOCK.bear.map((t,i)=>React.createElement("div",{key:i,style:{fontSize:12,color:"var(--ink-secondary)",marginBottom:6,lineHeight:1.6}},"· "+t))
+      )
+    ),
+
+    /* Logs */
+    React.createElement("div",{style:{padding:14,background:"var(--bg-surface)",border:"1px solid var(--border-light)",maxHeight:180,overflowY:"auto",fontFamily:"var(--font-mono)",fontSize:11,lineHeight:2}},
+      logs.map((l,i)=>React.createElement("div",{key:i,style:{color:l.startsWith("✓")?"var(--ink-secondary)":"var(--accent)"}},
+        React.createElement("span",{style:{color:"var(--ink-tertiary)",marginRight:10}},new Date().toLocaleTimeString("zh-CN",{hour12:false})),
+        l
+      ))
+    )
+  );
+}
+
+/* ── View: Report ── */
+function ReportView({ ticker }) {
+  return React.createElement("div",{style:{maxWidth:720,margin:"0 auto",padding:"64px 32px 48px",animation:"slideIn 0.4s ease"}},
+    /* Cover */
+    React.createElement("div",{style:{textAlign:"center",padding:"48px 0 36px",borderBottom:"1px solid var(--border-light)",marginBottom:36}},
+      React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--ink-tertiary)",letterSpacing:"0.12em",marginBottom:14}},"DEEP DIVE REPORT"),
+      React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:28,fontWeight:700,color:"var(--ink-primary)",letterSpacing:"0.04em",lineHeight:1.3}},(ticker||"贵州茅台")+" (600519.SH)"),
+      React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:16,color:"var(--ink-secondary)",marginTop:8}},"护城河坚固，估值具备吸引力"),
+      React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--ink-tertiary)",marginTop:16}},"2026年5月17日 · 深度研究报告")
+    ),
+
+    /* Rating */
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:10,marginBottom:32}},
+      [{l:"财务健康",v:"优秀",c:"var(--data-positive)"},{l:"估值水平",v:"低估",c:"var(--accent)"},{l:"成长前景",v:"稳健",c:"var(--ink-primary)"},{l:"风险等级",v:"中等",c:"var(--ink-secondary)"}].map(r=>
+        React.createElement("div",{key:r.l,style:{padding:"16px 10px",textAlign:"center",background:"var(--bg-surface)",border:"1px solid var(--border-light)"}},
+          React.createElement("div",{style:{fontSize:10,color:"var(--ink-tertiary)",fontFamily:"var(--font-mono)",letterSpacing:"0.06em",marginBottom:4}},r.l),
+          React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:22,fontWeight:600,color:r.c}},r.v)
+        )
+      )
+    ),
+
+    /* Key data */
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:10,marginBottom:32}},
+      [{l:"当前价格",v:"1,680",s:"CNY"},{l:"加权目标价",v:"1,970",s:"+17.3% 上行空间",sc:"var(--accent)"},{l:"综合评级",v:"买入",s:"置信度 72%",sc:"var(--accent)"}].map(k=>
+        React.createElement("div",{key:k.l,style:{padding:"20px 10px",textAlign:"center",background:"var(--bg-surface)",border:"1px solid var(--border-light)"}},
+          React.createElement("div",{style:{fontSize:10,color:"var(--ink-tertiary)",fontFamily:"var(--font-mono)",letterSpacing:"0.06em",marginBottom:4}},k.l),
+          React.createElement("div",{style:{fontFamily:"var(--font-display)",fontSize:34,fontWeight:700,color:"var(--ink-primary)",lineHeight:1.2}},k.v),
+          React.createElement("div",{style:{fontSize:11,color:k.sc||"var(--ink-tertiary)",marginTop:2}},k.s)
+        )
+      )
+    ),
+
+    /* TOC */
+    React.createElement("div",{style:{borderTop:"1px solid var(--border-light)",borderBottom:"1px solid var(--border-light)",padding:"20px 0",marginBottom:32}},
+      React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:15,fontWeight:600,color:"var(--ink-primary)",marginBottom:14}},"目录"),
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 24px"}},
+        ["1. 投资摘要","2. 公司概况","3. 行业分析","4. 财务分析","5. 估值分析","6. 风险提示","7. 投资建议"].map(s=>
+          React.createElement("div",{key:s,style:{fontSize:13,color:"var(--ink-secondary)",padding:"4px 0",cursor:"pointer",transition:"color 0.15s"}},s)
+        )
+      )
+    ),
+
+    /* Chart placeholder */
+    React.createElement("div",{style:{padding:"32px 20px",background:"var(--bg-surface)",border:"1px dashed var(--border)",textAlign:"center",marginBottom:32}},
+      React.createElement("div",{style:{display:"flex",alignItems:"flex-end",justifyContent:"center",gap:10,height:100}},
+        [40,55,45,70,55,82,62,75].map((h,i)=>React.createElement("div",{key:i,style:{flex:1,maxWidth:40,height:h+"%",background:h===82?"var(--accent)":"var(--data-series-3)",opacity:0.7}}))
+      ),
+      React.createElement("div",{style:{fontSize:11,color:"var(--ink-tertiary)",marginTop:14}},"营收/净利润趋势（2019–2025）· 单位：亿元")
+    ),
+
+    /* Valuation table */
+    React.createElement("div",{style:{marginBottom:32}},
+      React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:17,fontWeight:600,color:"var(--ink-primary)",marginBottom:14}},"估值分析"),
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 10px"}},
+        [{l:"DCF 三阶段",v:"1,950.00"},{l:"Owner Earnings",v:"2,100.00"},{l:"EV / EBITDA",v:"1,850.00"},{l:"加权目标价",v:"1,970.25",h:true}].map(r=>
+          React.createElement("div",{key:r.l,style:{padding:"10px 14px",background:r.h?"var(--accent-soft)":"var(--bg-surface)",display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:r.h?600:400}},
+            React.createElement("span",{style:{color:"var(--ink-tertiary)"}},r.l),
+            React.createElement("span",{style:{fontFamily:"var(--font-mono)",color:r.h?"var(--accent)":"var(--ink-primary)",fontWeight:r.h?600:400}},r.v)
+          )
+        )
+      )
+    ),
+
+    /* Risk */
+    React.createElement("div",{style:{marginBottom:32}},
+      React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:17,fontWeight:600,color:"var(--ink-primary)",marginBottom:14}},"风险提示"),
+      React.createElement("div",{style:{fontSize:13,color:"var(--ink-secondary)",lineHeight:1.9}},
+        React.createElement("p",null,"核心风险：消费降级下高端白酒需求放缓；行业监管趋严，消费税改革风险；宏观经济放缓抑制商务消费场景。"),
+        React.createElement("p",{style:{marginTop:8}},"核心机遇：直销占比提升推升净利率；品牌壁垒为行业最强，消费者价格弹性极低；DCF 模型显示 17.3% 上行空间。")
+      )
+    ),
+
+    /* Footer */
+    React.createElement("div",{style:{textAlign:"center",padding:"48px 0 0",fontSize:11,color:"var(--ink-tertiary)",borderTop:"1px solid var(--border-light)"}},
+      "AI 辅助生成 · 仅供参考 · 不构成投资建议",React.createElement("br"),
+      "Generated by 研报 Agent · Research Platform"
+    )
+  );
+}
+
+/* ── View: Reports List ── */
+function ReportsView() {
+  const mockReports = [
+    {id:"1",ticker:"600519.SH",name:"贵州茅台",type:"深度研报",date:"2026-05-17",verdict:"买入",upside:"+17.3%"},
+    {id:"2",ticker:"300750.SZ",name:"宁德时代",type:"深度研报",date:"2026-05-16",verdict:"买入",upside:"+22.1%"},
+    {id:"3",ticker:"000858.SZ",name:"五粮液",type:"快速简报",date:"2026-05-15",verdict:"持有",upside:"+4.5%"},
+  ];
+  return React.createElement("div",{style:{maxWidth:860,margin:"0 auto",padding:"48px 32px",animation:"slideIn 0.4s ease"}},
+    React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:22,fontWeight:700,color:"var(--ink-primary)",marginBottom:6}},"报告列表"),
+    React.createElement("div",{style:{fontSize:13,color:"var(--ink-secondary)",marginBottom:28}},"管理已生成的研究报告。数据仅保存在当前会话中。"),
+    React.createElement("div",{style:{border:"1px solid var(--border-light)"}},
+      /* Header */
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"10px 16px",background:"var(--bg-surface)",fontSize:10,fontFamily:"var(--font-mono)",color:"var(--ink-tertiary)",letterSpacing:"0.06em",borderBottom:"1px solid var(--border-light)"}},
+        React.createElement("div",null,"标的"),React.createElement("div",null,"类型"),React.createElement("div",null,"日期"),React.createElement("div",null,"评级")
+      ),
+      mockReports.map(r=>React.createElement("div",{key:r.id,style:{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"12px 16px",fontSize:13,borderBottom:"1px solid var(--border-light)",cursor:"pointer",transition:"background 0.15s",alignItems:"center"},onMouseEnter:e=>e.target.style.background="var(--bg-surface)",onMouseLeave:e=>e.target.style.background="transparent"},
+        React.createElement("div",null,React.createElement("div",{style:{fontWeight:500,color:"var(--ink-primary)"}},r.name),React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--ink-tertiary)"}},r.ticker)),
+        React.createElement("div",{style:{color:"var(--ink-secondary)"}},r.type),
+        React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--ink-tertiary)"}},r.date),
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},React.createElement("span",{style:{color:r.verdict==="买入"?"var(--accent)":"var(--ink-secondary)",fontWeight:500}},r.verdict),React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:10,color:r.upside.startsWith("+")?"var(--data-positive)":"var(--ink-tertiary)"}},r.upside))
+      ))
+    ),
+    /* Empty state */
+    React.createElement("div",{style:{textAlign:"center",padding:"40px",fontSize:12,color:"var(--ink-tertiary)"}},"数据仅保存在当前会话 · 刷新后清空")
+  );
+}
+
+/* ── View: Templates ── */
+function TemplatesView() {
+  const temps = [
+    {id:"default",n:"深度研报（默认）",d:"7 章节 · 10 图表 · 约 7000 字",mkt:"A/港/美"},
+    {id:"brief",n:"快速简报",d:"4 章节 · 4 图表 · 约 2500 字",mkt:"A/港/美"},
+    {id:"cn",n:"A 股专用模板",d:"含行业对标、申万分类、政策分析",mkt:"A 股"},
+  ];
+  return React.createElement("div",{style:{maxWidth:720,margin:"0 auto",padding:"48px 32px",animation:"slideIn 0.4s ease"}},
+    React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:22,fontWeight:700,color:"var(--ink-primary)",marginBottom:6}},"模板管理"),
+    React.createElement("div",{style:{fontSize:13,color:"var(--ink-secondary)",marginBottom:28}},"选择或自定义报告模板。自定义模板功能 (Phase 2)。"),
+    temps.map(t=>React.createElement("div",{key:t.id,style:{padding:"16px",marginBottom:8,background:"var(--bg-surface)",border:"1px solid var(--border-light)",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:14,fontWeight:600,color:"var(--ink-primary)",marginBottom:2}},t.n),
+        React.createElement("div",{style:{fontSize:12,color:"var(--ink-secondary)",lineHeight:1.5}},t.d)
+      ),
+      React.createElement("div",{style:{fontSize:10,fontFamily:"var(--font-mono)",color:"var(--ink-tertiary)",border:"1px solid var(--border-light)",padding:"3px 8px"}},t.mkt)
+    ))
+  );
+}
+
+/* ── View: Settings ── */
+function SettingsView() {
+  return React.createElement("div",{style:{maxWidth:720,margin:"0 auto",padding:"48px 32px",animation:"slideIn 0.4s ease"}},
+    React.createElement("div",{style:{fontFamily:"var(--font-serif)",fontSize:22,fontWeight:700,color:"var(--ink-primary)",marginBottom:6}},"模型与配置"),
+    React.createElement("div",{style:{fontSize:13,color:"var(--ink-secondary)",marginBottom:28}},"当前生效的 LLM 和数据源配置。"),
+    React.createElement("div",{style:{padding:"16px",background:"var(--bg-surface)",border:"1px solid var(--border-light)",marginBottom:12}},
+      React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--ink-tertiary)",letterSpacing:"0.06em",marginBottom:8}},"LLM 配置"),
+      React.createElement("div",{style:{fontSize:13,color:"var(--ink-primary)",lineHeight:2}},
+        React.createElement("div",null,"深度模型：",React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:12}},"DeepSeek V4 Pro")),
+        React.createElement("div",null,"快速模型：",React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:12}},"DeepSeek V4 Pro")),
+        React.createElement("div",null,"Temperature：",React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:12}},"0.3"))
+      )
+    ),
+    React.createElement("div",{style:{padding:"16px",background:"var(--bg-surface)",border:"1px solid var(--border-light)",marginBottom:12}},
+      React.createElement("div",{style:{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--ink-tertiary)",letterSpacing:"0.06em",marginBottom:8}},"数据源"),
+      React.createElement("div",{style:{fontSize:13,color:"var(--ink-primary)",lineHeight:2}},
+        React.createElement("div",null,"A 股：",React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:12}},"AkShare → Tushare (fallback)")),
+        React.createElement("div",null,"港股：",React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:12}},"Yahoo Finance")),
+        React.createElement("div",null,"美股：",React.createElement("span",{style:{fontFamily:"var(--font-mono)",fontSize:12}},"Yahoo Finance → SEC EDGAR"))
+      )
+    ),
+    React.createElement("div",{style:{textAlign:"center",padding:"24px",fontSize:11,color:"var(--ink-tertiary)"}},"完整配置编辑器 (Phase 2) · 当前通过 config.json 文件管理")
+  );
+}
+
+/* ═══════════════════ APP ROOT ═══════════════════ */
+function App() {
+  const [view, setView] = useState("new");
+  const [analysisState, setAnalysisState] = useState(null); // {ticker, depth}
+
+  const handleStart = (ticker, depth, advanced) => {
+    setAnalysisState({ticker,depth,advanced});
+    setView("progress");
+  };
+
+  const handleComplete = () => setView("report");
+
+  return React.createElement("div",{style:{display:"flex",height:"100vh"}},
+    React.createElement(Sidebar,{view,setView,usagePct:33}),
+    React.createElement("div",{style:{flex:1,overflowY:"auto"}},
+      React.createElement(TopBar,{view,setView,onStartAnalysis:()=>view==="new"&&handleStart("贵州茅台","deep")}),
+      view==="new" && React.createElement(NewAnalysisView,{onStart:handleStart}),
+      view==="progress" && React.createElement(ProgressView,{
+        ticker:analysisState?.ticker,depth:analysisState?.depth,
+        onComplete:handleComplete
+      }),
+      view==="report" && React.createElement(ReportView,{ticker:analysisState?.ticker}),
+      view==="reports" && React.createElement(ReportsView),
+      view==="templates" && React.createElement(TemplatesView),
+      view==="settings" && React.createElement(SettingsView),
+      /* Status bar */
+      React.createElement("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"var(--bg-elevated)",borderTop:"1px solid var(--border-light)",padding:"6px 24px",display:"flex",justifyContent:"space-between",fontSize:10,fontFamily:"var(--font-mono)",color:"var(--ink-tertiary)",zIndex:50}},
+        React.createElement("span",null,"view: "+view+" · api: local-dev"),
+        React.createElement("span",null,"DeepSeek V4 Pro · AkShare")
+      )
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
