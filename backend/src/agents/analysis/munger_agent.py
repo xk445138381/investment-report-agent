@@ -35,8 +35,9 @@ async def run_munger_agent(ticker, company_name, financial_analysis=None, valuat
     prompt = _build_munger_prompt(ctx)
     for attempt in range(3):
         try:
+            loop = asyncio.get_event_loop()
             response = await asyncio.wait_for(
-                model.ainvoke([HumanMessage(content=prompt)]),
+                loop.run_in_executor(None, lambda: model.invoke([HumanMessage(content=prompt)])),
                 timeout=timeout // 3
             )
             text = response.content if hasattr(response, "content") else str(response)

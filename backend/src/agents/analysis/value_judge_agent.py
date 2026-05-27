@@ -37,8 +37,9 @@ async def run_value_judge(ticker, company_name, duan_result=None, munger_result=
     prompt = _build_judge_prompt(ctx)
     for attempt in range(3):
         try:
+            loop = asyncio.get_event_loop()
             response = await asyncio.wait_for(
-                model.ainvoke([HumanMessage(content=prompt)]),
+                loop.run_in_executor(None, lambda: model.invoke([HumanMessage(content=prompt)])),
                 timeout=timeout // 3
             )
             text = response.content if hasattr(response, "content") else str(response)

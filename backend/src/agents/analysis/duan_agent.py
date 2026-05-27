@@ -38,11 +38,13 @@ async def run_duan_agent(ticker, company_name, financial_analysis=None, valuatio
         return _duan_fallback(ticker, company_name, ctx)
 
     prompt = _build_duan_prompt(ctx)
+    loop = asyncio.get_event_loop()
     for attempt in range(3):
         try:
+            # Use sync invoke in thread pool to avoid asyncio/httpx CancelledError
             response = await asyncio.wait_for(
-                model.ainvoke([HumanMessage(content=prompt)]),
-                timeout=timeout // 3  # per-attempt timeout
+                loop.run_in_executor(None, lambda: model.invoke([HumanMessage(content=prompt)])),
+                timeout=timeout // 3
             )
             text = response.content if hasattr(response, "content") else str(response)
             return _parse_duan_response(text, ticker, company_name)
