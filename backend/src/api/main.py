@@ -1,14 +1,20 @@
 """FastAPI application — investment report agent API."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import orjson
 
-load_dotenv()  # Load .env file into os.environ
+# Load .env from backend root (parent of src/api/)
+_ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(_ENV_PATH)
+logger = logging.getLogger(__name__)
+logger.info(f"Loaded .env from {_ENV_PATH} (DEEPSEEK_KEY={'set' if os.getenv('DEEPSEEK_API_KEY') else 'MISSING'})")
 
 
 class ORJSONResponse(JSONResponse):

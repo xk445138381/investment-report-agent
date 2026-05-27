@@ -38,18 +38,22 @@ async def run_duan_agent(ticker, company_name, financial_analysis=None, valuatio
         return _duan_fallback(ticker, company_name, ctx)
 
     prompt = _build_duan_prompt(ctx)
-    try:
-        response = await asyncio.wait_for(
-            model.ainvoke([HumanMessage(content=prompt)]),
-            timeout=timeout
-        )
-        text = response.content if hasattr(response, "content") else str(response)
-        return _parse_duan_response(text, ticker, company_name)
-    except asyncio.TimeoutError:
-        logger.warning(f"Duan agent({ticker}): LLM timeout, using fallback")
-    except Exception as e:
-        logger.warning(f"Duan agent({ticker}): LLM error: {e}")
+    for attempt in range(3):
+        try:
+            response = await asyncio.wait_for(
+                model.ainvoke([HumanMessage(content=prompt)]),
+                timeout=timeout // 3  # per-attempt timeout
+            )
+            text = response.content if hasattr(response, "content") else str(response)
+            return _parse_duan_response(text, ticker, company_name)
+        except asyncio.TimeoutError:
+            logger.warning(f"Duan agent({ticker}): LLM timeout attempt {attempt+1}/3, retrying...")
+            await asyncio.sleep(3)
+        except Exception as e:
+            logger.warning(f"Duan agent({ticker}): LLM error attempt {attempt+1}/3: {e}")
+            await asyncio.sleep(2)
 
+    logger.warning(f"Duan agent({ticker}): All 3 LLM attempts failed, using fallback")
     return _duan_fallback(ticker, company_name, ctx)
 
 

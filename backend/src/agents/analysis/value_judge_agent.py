@@ -35,18 +35,22 @@ async def run_value_judge(ticker, company_name, duan_result=None, munger_result=
         return _judge_fallback(ticker, company_name, ctx)
 
     prompt = _build_judge_prompt(ctx)
-    try:
-        response = await asyncio.wait_for(
-            model.ainvoke([HumanMessage(content=prompt)]),
-            timeout=timeout
-        )
-        text = response.content if hasattr(response, "content") else str(response)
-        return _parse_judge_response(text, ticker, company_name)
-    except asyncio.TimeoutError:
-        logger.warning(f"Value judge({ticker}): LLM timeout, using fallback")
-    except Exception as e:
-        logger.warning(f"Value judge({ticker}): LLM error: {e}")
+    for attempt in range(3):
+        try:
+            response = await asyncio.wait_for(
+                model.ainvoke([HumanMessage(content=prompt)]),
+                timeout=timeout // 3
+            )
+            text = response.content if hasattr(response, "content") else str(response)
+            return _parse_judge_response(text, ticker, company_name)
+        except asyncio.TimeoutError:
+            logger.warning(f"Value judge({ticker}): LLM timeout attempt {attempt+1}/3, retrying...")
+            await asyncio.sleep(3)
+        except Exception as e:
+            logger.warning(f"Value judge({ticker}): LLM error attempt {attempt+1}/3: {e}")
+            await asyncio.sleep(2)
 
+    logger.warning(f"Value judge({ticker}): All 3 LLM attempts failed, using fallback")
     return _judge_fallback(ticker, company_name, ctx)
 
 
