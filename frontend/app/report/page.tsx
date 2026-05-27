@@ -13,15 +13,18 @@ type Data = any;
 const MOCK: Data = {
   score: { total: 30.2, max: 32, rating: "EXCELLENT" },
   val: { weighted_value: 2440, weighted_upside_pct: 83.1, signal: "undervalued" },
-  verdict: "STRONG_BUY", verdict_conf: 80,
+  verdict: "STRONG_BUY", verdict_conf: 85,
   current_price: 1332.95,
   isValueTemplate: false,
   sections: {
-    executive_summary: { title: "投资摘要", content: "600519.SH 当前股价 1332.95 元，加权目标价 2439.98 元，上行空间 83.1%。财务健康度 EXCELLENT（30.2/32分）。综合评级：STRONG_BUY。" },
-    financial_analysis: { title: "财务分析", content: "ROE: 24.3% | 负债权益比: 0.15" },
-    valuation: { title: "估值分析", content: "DCF估值: 3248.24 | Owner Earnings: 1631.72 | 加权目标价: 2439.98 | 评级: undervalued" },
-    risk_assessment: { title: "风险提示", content: "核心风险: 宏观经济放缓抑制商务消费场景\n\n核心机遇: 直销占比提升将直接推升净利率" },
-    investment_recommendation: { title: "投资建议", content: "600519.SH 综合评级: STRONG_BUY（83.1%空间）" },
+    executive_summary: { title: "投资摘要", content: "贵州茅台（600519.SH）当前 1332.95 元。判定：Yes（可买）。估计内在价值 2440 元，上行空间 83.1%。财务底子：EXCELLENT（30.2/32分）。商业模式清晰，看得懂。" },
+    business_model: { title: "商业模式", content: "高 ROE（24.3%）表明公司具备可持续竞争优势。毛利率 68.4%，产品或服务有定价权——客户离不开你。几乎零负债（D/E 0.15），管理层不赌。段永平会说：这生意我看得懂，不需要复杂模型。" },
+    corporate_character: { title: "企业文化与本分", content: "股权结构：中国贵州茅台酒厂集团 54.4%（国有）| 香港中央结算 4.7% | 贵州国有资本运营 4.6%。本分评分 85/100。财务保守（低杠杆），管理层不赌——好信号。" },
+    financial_health: { title: "财务健康与现金流", content: "财务综合评分 30.2/32 — EXCELLENT\nROE 24.3% | FCF/净利 0.92 | 负债权益比 0.15 | 营收增长 +15.2%\n底线：这盘生意的财务底子好。" },
+    valuation: { title: "估值与安全边际", content: "内在价值 2440 元/股（当前 1332.95，+83.1%）。DCF: 3248 | Owner Earnings: 1632。安全边际 45%（>30%，足够厚）。低于 1708 开始买入，低于 1220 可重仓。" },
+    inversion_checklist: { title: "逆向风险清单", content: "初步排查未发现明显致命风险。但芒格会提醒：你的检查清单本身可能有盲点。系统性风险：竞争颠覆/监管突变/宏观黑天鹅。" },
+    dual_verdict: { title: "双重视角裁决", content: "段永平：好生意+好价格。芒格：同意，但保持谦虚。共识：商业模式清晰+未发现致命风险。分歧：无实质分歧。Yes。" },
+    final_judgment: { title: "综合判定", content: "贵州茅台 — Yes（置信度 85%）。买价参考：低于 1708 开始买入，低于 1220 重仓。仓位建议：最多 10%（单一标的上限）。" },
   },
 };
 
@@ -282,9 +285,9 @@ const [loading, setLoading] = useState(!!taskId);
       )}
 
       {/* Export */}
-      <div className="flex justify-center gap-4 mb-12 mt-8">
-        <button className="px-6 py-2.5 text-[13px] font-sans border border-border bg-bg-surface text-ink-primary cursor-pointer hover:bg-bg-warm transition-colors">导出 PDF</button>
-        <button className="px-6 py-2.5 text-[13px] font-sans border border-border bg-bg-surface text-ink-primary cursor-pointer hover:bg-bg-warm transition-colors">导出 Word</button>
+      <div className="flex justify-center gap-4 mb-12 mt-8 print:hidden">
+        <button onClick={() => window.print()} className="px-6 py-2.5 text-[13px] font-sans border border-border bg-bg-surface text-ink-primary cursor-pointer hover:bg-bg-warm transition-colors">导出 PDF</button>
+        <button className="px-6 py-2.5 text-[13px] font-sans border border-border bg-bg-surface text-ink-primary cursor-pointer hover:bg-bg-warm transition-colors opacity-40" title="即将支持">导出 Word</button>
       </div>
 
       {/* Disclaimer */}

@@ -38,6 +38,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="zh-CN" className={`${notoSansSC.variable} ${notoSerifSC.variable} ${jetbrainsMono.variable} ${playfair.variable} h-full antialiased`}>
+      <head>
+        <style>{`
+          @media print {
+            @page { margin: 2cm 1.8cm; size: A4; }
+            body { background: white !important; color: #1a1a1a !important; }
+            aside, header, .print\\:hidden { display: none !important; }
+            main { overflow: visible !important; max-width: none !important; }
+            .max-w-\\[720px\\] { max-width: none !important; }
+            .border, .border-b, .border-t { border-color: #ccc !important; }
+            .bg-bg-surface { background: white !important; }
+            .text-ink-primary { color: #1a1a1a !important; }
+            .text-ink-secondary { color: #444 !important; }
+            .text-ink-tertiary { color: #888 !important; }
+            img { max-width: 100%; page-break-inside: avoid; }
+            h1, h2 { page-break-after: avoid; }
+            .space-y-6 > * { page-break-inside: avoid; }
+          }
+        `}</style>
+      </head>
       <body className="min-h-full bg-bg-warm text-ink-primary font-sans">
         <div className="flex h-screen overflow-hidden">
           {/* Sidebar */}
