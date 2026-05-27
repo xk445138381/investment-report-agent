@@ -88,8 +88,8 @@ def _render_value_template(ticker, company_name, ctx_state, fin_analysis, valuat
             },
             "business_model": {
                 "title": "商业模式：它怎么赚钱，为什么能持续",
-                "content": duan.get("analysis", "商业模式分析待补充")[:1200],
-                "word_count": len(duan.get("analysis", "")) // 3,
+                "content": _val_business_model(duan, ratios, industry, score),
+                "word_count": 300,
             },
             "corporate_character": {
                 "title": "企业文化与本分",
@@ -108,8 +108,8 @@ def _render_value_template(ticker, company_name, ctx_state, fin_analysis, valuat
             },
             "inversion_checklist": {
                 "title": "逆向风险清单：这笔投资怎么死",
-                "content": munger.get("analysis", "风险分析待补充")[:1200],
-                "word_count": len(munger.get("analysis", "")) // 3,
+                "content": _val_inversion_checklist(munger, ratios, score, duan),
+                "word_count": 300,
             },
             "dual_verdict": {
                 "title": "双重视角裁决",
@@ -126,6 +126,104 @@ def _render_value_template(ticker, company_name, ctx_state, fin_analysis, valuat
         "report_subtitle": f"段永平 × 芒格 双重视角 | {date.today().strftime('%Y年%m月')}",
         "report_date": date.today().isoformat(),
     }
+
+
+def _val_business_model(duan, ratios, industry, score):
+    """Business model section: LLM text if rich, otherwise data-driven fallback."""
+    duan_text = duan.get("analysis", "")
+    # If LLM produced real content (not fallback), use it
+    if duan_text and len(duan_text) > 100 and "fallback" not in str(duan.get("perspective", "")):
+        return duan_text[:1200]
+
+    # Data-driven fallback
+    lines = ["## 商业模式分析（数据驱动）\n"]
+    roe = ratios.get("roe")
+    gm = ratios.get("_gross_margin") or ratios.get("gross_margin")
+    nm = ratios.get("net_margin")
+    fcf_ni = ratios.get("fcf_to_net_income")
+    de = ratios.get("debt_to_equity")
+    growth = ratios.get("revenue_growth_yoy")
+
+    # Profitability signals
+    if roe and roe > 0.20:
+        lines.append(f"高 ROE（{_pct(roe)}）表明公司具备可持续竞争优势——这是段永平最看重的指标。能用很少的资本产生很高的回报，意味着这盘生意不需要持续大量投入就能赚钱。")
+    elif roe and roe > 0.10:
+        lines.append(f"ROE {_pct(roe)}，处于合理水平。需要进一步分析：回报是否来自真正的竞争优势，还是周期性因素。")
+
+    if gm and gm > 0.50:
+        lines.append(f"毛利率 {_pct(gm)}，说明产品或服务有定价权——客户离不开你。这是护城河的重要证据。")
+    elif nm and nm > 0.20:
+        lines.append(f"净利润率 {_pct(nm)}，盈利能力强。但要区分：是行业普遍好还是公司特别好？后者才是护城河。")
+
+    # Cash flow quality
+    if fcf_ni and fcf_ni > 0.8:
+        lines.append(f"FCF/净利润 = {fcf_ni:.2f}，利润几乎全部转化为现金。这是段永平最放心的公司类型——赚的不是纸上利润，是真钱。")
+    elif fcf_ni is not None and fcf_ni < 0.5:
+        lines.append(f"⚠ FCF/净利润仅 {fcf_ni:.2f}，利润质量存疑。段永平会问：钱去哪了？为什么赚了利润却没有现金？")
+
+    # Capital efficiency
+    if de is not None and de < 0.3:
+        lines.append(f"几乎零负债（D/E = {de:.2f}）。公司不需要借钱就能运营和增长，财务极其保守——说明管理层不赌。")
+
+    # Growth check
+    if growth is not None:
+        direction = "增长" if growth > 0.05 else "放缓" if growth < 0 else "平稳"
+        lines.append(f"营收{direction}（YoY {_pct(growth)}）。段永平不追求高增长，他追求确定性。低速但确定 > 高速但不稳。")
+
+    if len(lines) == 1:
+        lines.append("数据不足，无法从财务角度评估商业模式。请参考段永平视角的完整分析。")
+
+    return "\n\n".join(lines)
+
+
+def _val_inversion_checklist(munger, ratios, score, duan):
+    """Inversion checklist: LLM text if rich, otherwise structured risk analysis."""
+    munger_text = munger.get("analysis", "")
+    if munger_text and len(munger_text) > 100 and "fallback" not in str(munger.get("perspective", "")):
+        return munger_text[:1200]
+
+    # Data-driven inversion checklist
+    lines = ["## 逆向风险清单（数据驱动）\n"]
+    de = ratios.get("debt_to_equity")
+    growth = ratios.get("revenue_growth_yoy")
+    fcf_ni = ratios.get("fcf_to_net_income")
+    curr = ratios.get("current_ratio")
+    roe = ratios.get("roe")
+
+    risks_found = 0
+
+    # 1. Leverage risk
+    if de is not None and de > 1.0:
+        lines.append(f"**死法 1：杠杆爆雷。** 负债权益比 {de:.2f}，高杠杆意味着容错空间极小。一旦盈利下滑或融资收紧，债务利息就会变成致命负担。芒格说过：杠杆+愚蠢=灾难。")
+        risks_found += 1
+    elif de is not None and de > 0.5:
+        lines.append(f"**风险：中度杠杆。** 负债权益比 {de:.2f}，虽不算危险，但经济下行时会放大损失。逆向想：如果营收下滑 30%，还能还债吗？")
+        risks_found += 1
+
+    # 2. Growth reversal
+    if growth is not None and growth < 0.05:
+        lines.append(f"**死法 2：增长神话破灭。** 营收增长仅 {_pct(growth)}。如果市场此前给了高估值，一旦增长故事讲不下去，戴维斯双杀。芒格会问：你确定不是因为FOMO才关注这只股票？")
+        risks_found += 1
+
+    # 3. Cash flow quality
+    if fcf_ni is not None and fcf_ni < 0.5:
+        lines.append(f"**死法 3：现金断流。** FCF/净利润仅 {fcf_ni:.2f}。如果应收账款暴雷或存货贬值，纸面利润瞬间蒸发。记住：利润是意见，现金是事实。")
+        risks_found += 1
+
+    # 4. Business model vulnerability
+    biz_score = duan.get("business_clarity", 50) if duan.get("business_clarity") else 50
+    if biz_score < 60:
+        lines.append(f"**死法 4：看不懂的生意。** 商业模式清晰度评分 {biz_score}/100。芒格：如果你不能在两分钟内讲清楚这家公司怎么赚钱，你就是不懂。不懂的东西别碰。")
+        risks_found += 1
+
+    # 5. Lollapalooza check
+    if risks_found >= 2:
+        lines.append(f"**Lollapalooza 警告：** 已识别 {risks_found} 个风险因子。多种风险同时发力会相互强化——单个风险可控，组合起来可能是毁灭性的。")
+    elif risks_found == 0:
+        lines.append("**初步排查未发现明显致命风险。** 但芒格会提醒：你的检查清单本身可能有盲点。最大的风险往往是你没想到的那个。")
+        lines.append("系统性风险清单：竞争颠覆 / 技术替代 / 监管突变 / 管理层失德 / 宏观黑天鹅。每一项都应该认真想过。")
+
+    return "\n\n".join(lines)
 
 
 def _val_one_liner(ticker, name, price, target, upside, label, conf, score, duan):
