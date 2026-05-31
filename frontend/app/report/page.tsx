@@ -133,16 +133,16 @@ const [loading, setLoading] = useState(!!taskId);
   if (scanData) return (
     <div className="max-w-[500px] mx-auto px-6 py-12">
       <div className="bg-bg-surface border border-border-light p-6">
-        <div className="font-mono text-[10px] text-ink-tertiary tracking-[0.12em] mb-4">QUICK SCAN</div>
+        <div className="font-mono text-xs text-ink-tertiary tracking-[0.12em] mb-4">QUICK SCAN</div>
         <div className="flex items-end justify-between mb-4">
           <div>
-            <div className="font-serif text-[22px] font-bold text-ink-primary">{scanData.company_name}</div>
-            <div className="font-mono text-[11px] text-ink-tertiary">{scanData.ticker}</div>
+            <div className="font-serif text-2xl font-bold text-ink-primary">{scanData.company_name}</div>
+            <div className="font-mono text-sm text-ink-tertiary">{scanData.ticker}</div>
           </div>
           <div className="text-right">
-            <div className="font-display text-[36px] font-bold text-ink-primary leading-none">{scanData.price.toLocaleString()}</div>
+            <div className="font-display text-4xl font-bold text-ink-primary leading-none">{scanData.price.toLocaleString()}</div>
             {scanData.change_pct !== 0 && (
-              <div className={`font-mono text-[12px] mt-0.5 ${scanData.change_pct > 0 ? 'text-data-positive' : 'text-accent'}`}>
+              <div className={`font-mono text-sm mt-1 ${scanData.change_pct > 0 ? 'text-data-positive' : 'text-accent'}`}>
                 {scanData.change_pct > 0 ? '+' : ''}{scanData.change_pct.toFixed(2)}%
               </div>
             )}
@@ -151,7 +151,7 @@ const [loading, setLoading] = useState(!!taskId);
 
         {/* Key metrics */}
         {scanData.pe > 0 && (
-          <div className="text-center mb-3 font-mono text-[11px] text-ink-tertiary">
+          <div className="text-center mb-3 font-mono text-sm text-ink-tertiary">
             PE: {scanData.pe.toFixed(1)}
           </div>
         )}
@@ -164,24 +164,24 @@ const [loading, setLoading] = useState(!!taskId);
             { l: "MACD", v: scanData.tech.macd || "?" },
             { l: "量能", v: scanData.tech.volume || "?" },
           ].map((r) => (
-            <div key={r.l} className="text-center p-2 bg-bg-elevated border border-border-light">
-              <div className="text-[9px] text-ink-tertiary font-mono mb-0.5">{r.l}</div>
-              <div className="font-mono text-[13px] font-medium text-ink-primary">{String(r.v)}</div>
+            <div key={r.l} className="text-center p-3 bg-bg-elevated border border-border-light">
+              <div className="text-xs text-ink-tertiary font-mono mb-1">{r.l}</div>
+              <div className="font-mono text-base font-medium text-ink-primary">{String(r.v)}</div>
             </div>
           ))}
         </div>
 
         {/* LLM summary */}
-        <div className="p-3.5 bg-accent-soft border-l-2 border-accent mb-3">
-          <div className="text-[12px] text-ink-primary leading-relaxed font-serif">{scanData.summary}</div>
+        <div className="p-4 bg-accent-soft border-l-2 border-accent mb-3">
+          <div className="text-sm text-ink-primary leading-relaxed font-serif">{scanData.summary}</div>
         </div>
 
-        <div className="text-center pt-3 border-t border-border-light text-[10px] text-ink-tertiary">
+        <div className="text-center pt-3 border-t border-border-light text-xs text-ink-tertiary">
           AI 辅助生成 · 仅供参考
         </div>
       </div>
       <div className="text-center mt-6">
-        <button onClick={() => window.print()} className="px-5 py-2 text-[12px] font-sans border border-border bg-bg-surface text-ink-primary cursor-pointer hover:bg-bg-warm transition-colors">导出 PDF</button>
+        <button onClick={() => window.print()} className="px-5 py-2 text-sm font-sans border border-border bg-bg-surface text-ink-primary cursor-pointer hover:bg-bg-warm transition-colors">导出 PDF</button>
       </div>
     </div>
   );
@@ -200,12 +200,12 @@ const [loading, setLoading] = useState(!!taskId);
     <div className="max-w-[720px] mx-auto px-8 py-16">
       {/* Cover */}
       <div className="text-center py-12 border-b border-border-light mb-9">
-        <div className="font-mono text-[10px] text-ink-tertiary tracking-[0.12em] mb-3.5">
+        <div className="font-mono text-xs text-ink-tertiary tracking-[0.12em] mb-3.5">
           {isValueTemplate ? "VALUE INVESTING REPORT" : "DEEP DIVE REPORT"}
         </div>
-        <h1 className="font-serif text-[28px] font-bold text-ink-primary tracking-[0.04em] leading-tight">{ticker}</h1>
-        <p className="font-serif text-base text-ink-secondary mt-2">综合判定：<span className={verdictClass}>{verdictDisplay}</span></p>
-        <p className="font-mono text-[11px] text-ink-tertiary mt-4">{new Date().toISOString().slice(0, 10)} · {isValueTemplate ? "段永平×芒格 双重视角" : "深度研究报告"}</p>
+        <h1 className="font-serif text-3xl font-bold text-ink-primary tracking-[0.04em] leading-tight">{ticker}</h1>
+        <p className="font-serif text-lg text-ink-secondary mt-2">综合判定：<span className={verdictClass}>{verdictDisplay}</span></p>
+        <p className="font-mono text-sm text-ink-tertiary mt-4">{new Date().toISOString().slice(0, 10)} · {isValueTemplate ? "段永平×芒格 双重视角" : "深度研究报告"}</p>
       </div>
 
       {/* Rating cards - value template shows different labels */}
@@ -222,8 +222,8 @@ const [loading, setLoading] = useState(!!taskId);
           { l: "风险等级", v: "中等", c: "text-ink-secondary" },
         ]).map((r) => (
           <div key={r.l} className="p-4 text-center bg-bg-surface border border-border-light">
-            <div className="text-[10px] text-ink-tertiary font-mono tracking-[0.06em] mb-1">{r.l}</div>
-            <div className={`font-serif text-[22px] font-semibold ${r.c}`}>{r.v}</div>
+            <div className="text-xs text-ink-tertiary font-mono tracking-[0.06em] mb-1">{r.l}</div>
+            <div className={`font-serif text-2xl font-semibold ${r.c}`}>{r.v}</div>
           </div>
         ))}
       </div>
@@ -265,7 +265,7 @@ const [loading, setLoading] = useState(!!taskId);
             return (
               <div key={key} className="mb-6">
                 <div className="font-serif text-[17px] font-semibold text-ink-primary mb-3">{sec.title || key}</div>
-                <div className="text-[13px] text-ink-secondary leading-relaxed whitespace-pre-line">{sec.content}</div>
+                <div className="text-base text-ink-secondary leading-relaxed whitespace-pre-line">{sec.content}</div>
               </div>
             );
           })}
