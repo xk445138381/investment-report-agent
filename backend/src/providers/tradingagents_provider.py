@@ -32,9 +32,13 @@ class TradingAgentsProvider(DataProvider):
         if self._available is not None:
             return self._available
         try:
-            from tradingagents.dataflows.a_stock import resolve_ticker
-            code = resolve_ticker("贵州茅台")
-            self._available = bool(code and len(str(code)) == 6)
+            from tradingagents.dataflows.a_stock import get_stock_data, _normalize_ticker
+            code = _normalize_ticker("600519")
+            # Fast health check: just try getting 3 days of data via Sina HTTP
+            result = get_stock_data(code, date.today() - timedelta(days=5), date.today())
+            self._available = isinstance(result, str) and "Date,Open" in result
+            if self._available:
+                logger.info("TradingAgents provider healthy (Sina HTTP)")
             return self._available
         except Exception as e:
             logger.warning(f"TradingAgents health check failed: {e}")

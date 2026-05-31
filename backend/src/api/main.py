@@ -52,27 +52,32 @@ def env_status():
 
 @debug.get("/debug/llm")
 def test_llm():
-    """Quick test: call DeepSeek directly from server process."""
-    import requests as req
+    """Quick test: call DeepSeek via subprocess from server process."""
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if not api_key:
         return {"error": "No API key"}
+    import sys, subprocess, json as j
+    prompt = "用段永平的视角，一句话评价贵州茅台这家公司。"
+    script = f'''
+import sys, json
+import urllib.request
+api_key = {j.dumps(api_key)}
+body = json.dumps({{"model": "deepseek-v4-pro", "messages": [{{"role": "user", "content": {j.dumps(prompt)}}}], "max_tokens": 200}}).encode()
+req = urllib.request.Request("https://api.deepseek.com/v1/chat/completions", data=body, headers={{"Authorization": f"Bearer {{api_key}}", "Content-Type": "application/json"}}, method="POST")
+try:
+    with urllib.request.urlopen(req, timeout=60) as r:
+        resp = json.loads(r.read().decode())
+    print(resp["choices"][0]["message"]["content"])
+except Exception as e:
+    print(f"ERROR: {{e}}", file=sys.stderr)
+    sys.exit(1)
+'''
     try:
-        r = req.post("https://api.deepseek.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": "deepseek-v4-pro", "messages": [{"role": "user", "content": "一句话介绍茅台"}],
-                  "max_tokens": 100, "temperature": 0.3},
-            timeout=60)
-        if r.status_code == 200:
-            data = r.json()
-            choice0 = data.get("choices", [{}])[0] if data.get("choices") else {}
-            msg = choice0.get("message", {}) if isinstance(choice0, dict) else {}
-            return {"status": "ok", "model": data.get("model", "?"),
-                    "finish_reason": choice0.get("finish_reason", "none") if isinstance(choice0, dict) else "no_choice",
-                    "message_keys": list(msg.keys()) if msg else [],
-                    "content": str(msg.get("content", ""))[:300] if msg else "NO_MESSAGE",
-                    "message_type": str(type(msg))}
-        return {"error": f"HTTP {r.status_code}", "body": r.text[:300]}
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=90)
+        return {"ok": result.returncode == 0,
+                "stdout": result.stdout[:300],
+                "stderr": result.stderr[:200],
+                "rc": result.returncode}
     except Exception as e:
         return {"error": str(e)}
 
