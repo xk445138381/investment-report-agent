@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 type Section = { title: string; content: string };
 type NewsItem = { title: string; summary: string; date: string; source: string };
+type ScanCard = { ticker: string; company_name: string; price: number; overall: string; summary: string; tech: Record<string,unknown> };
 
 /* ── Mock data (fallback when no backend) ── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,6 +46,7 @@ const [newsItems, setNewsItems] = useState<NewsItem[]>(taskId ? [] : MOCK_NEWS);
 const [charts, setCharts] = useState<ChartData[]>([]);
 const [macroData, setMacroData] = useState<Record<string,unknown>|null>(null);
 const [ownership, setOwnership] = useState("");
+const [scanData, setScanData] = useState<ScanCard | null>(null);
 const [loading, setLoading] = useState(!!taskId);
 
   useEffect(() => {
@@ -54,6 +56,23 @@ const [loading, setLoading] = useState(!!taskId);
         const res = await fetch(`http://localhost:8000/api/v1/report/${taskId}`);
         if (!res.ok) throw new Error("Failed");
         const raw = await res.json();
+
+        // Detect quick scan mode
+        if (raw?.quick_summary && !raw?.section_writer) {
+          const qs = raw.quick_summary.result || {};
+          const tech = raw?.tech_indicators?.result?.signals || {};
+          const price = raw?.price_data?.result?.price_summary || {};
+          setScanData({
+            ticker: qs.ticker || ticker,
+            company_name: qs.company_name || ticker,
+            price: tech.latest_price || price.latest_price || 0,
+            overall: tech.trend || "?",
+            summary: qs.summary || "数据不足",
+            tech,
+          });
+          setLoading(false);
+          return;
+        }
 
         const sw = raw?.section_writer?.result;
         const fa = raw?.financial_analysis?.result;
@@ -104,7 +123,50 @@ const [loading, setLoading] = useState(!!taskId);
     </div>
   );
 
-  if (!data) return null;
+  if (!data && !scanData) return null;
+
+  // Quick scan card view
+  if (scanData) return (
+    <div className="max-w-[500px] mx-auto px-6 py-12">
+      <div className="bg-bg-surface border border-border-light p-6">
+        <div className="font-mono text-[10px] text-ink-tertiary tracking-[0.12em] mb-4">QUICK SCAN</div>
+        <div className="flex items-end justify-between mb-4">
+          <div>
+            <div className="font-serif text-[22px] font-bold text-ink-primary">{scanData.company_name}</div>
+            <div className="font-mono text-[11px] text-ink-tertiary">{scanData.ticker}</div>
+          </div>
+          <div className="font-display text-[36px] font-bold text-ink-primary">{scanData.price.toLocaleString()}</div>
+        </div>
+
+        {/* Tech signals */}
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          {[
+            { l: "趋势", v: scanData.overall },
+            { l: "RSI", v: scanData.tech.rsi || "?" },
+            { l: "MACD", v: scanData.tech.macd || "?" },
+            { l: "量能", v: scanData.tech.volume || "?" },
+          ].map((r) => (
+            <div key={r.l} className="text-center p-2 bg-bg-elevated border border-border-light">
+              <div className="text-[9px] text-ink-tertiary font-mono mb-0.5">{r.l}</div>
+              <div className="font-mono text-[13px] font-medium text-ink-primary">{String(r.v)}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* LLM summary */}
+        <div className="p-3.5 bg-accent-soft border-l-2 border-accent mb-3">
+          <div className="text-[12px] text-ink-primary leading-relaxed font-serif">{scanData.summary}</div>
+        </div>
+
+        <div className="text-center pt-3 border-t border-border-light text-[10px] text-ink-tertiary">
+          AI 辅助生成 · 仅供参考
+        </div>
+      </div>
+      <div className="text-center mt-6">
+        <button onClick={() => window.print()} className="px-5 py-2 text-[12px] font-sans border border-border bg-bg-surface text-ink-primary cursor-pointer hover:bg-bg-warm transition-colors">导出 PDF</button>
+      </div>
+    </div>
+  );
 
   const { score, val, verdict, current_price, sections, isValueTemplate } = data;
   const showNews = newsItems.length > 0;
