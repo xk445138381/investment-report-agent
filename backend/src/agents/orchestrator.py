@@ -70,9 +70,11 @@ class Orchestrator:
             "error": None,
         }
 
-        # Detect report type: value investing templates use their own pipeline
+        # Detect report type: template-based routing
         if "value_investor" in template_id:
             result["pipeline_type"] = "value_deep_dive"
+        elif "quick_scan" in template_id or any(w in user_message for w in ["扫", "快", "速", "技术"]):
+            result["pipeline_type"] = "quick_scan"
         elif any(w in user_message for w in ["宏观", "周报"]):
             result["pipeline_type"] = "macro_weekly"
         elif any(w in user_message for w in ["ipo", "新股", "上市"]):
@@ -288,6 +290,26 @@ class Orchestrator:
         if agent_name == "macro_data":
             from agents.data.macro_agent import run_macro_agent
             return await run_macro_agent(ticker=ctx.ticker, company_name=ctx.company_name)
+
+        # Quick scan agents
+        if agent_name == "tech_indicators":
+            from agents.data.tech_indicators_agent import run_tech_indicators
+            return await run_tech_indicators(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                prices=ctx.state.get("_prices", []),
+            )
+        if agent_name == "fund_flow":
+            from agents.data.fund_flow_agent import run_fund_flow
+            return await run_fund_flow(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                prices=ctx.state.get("_prices", []),
+            )
+        if agent_name == "quick_summary":
+            from agents.assembly.quick_summary_agent import run_quick_summary
+            return await run_quick_summary(
+                ticker=ctx.ticker, company_name=ctx.company_name,
+                ctx_state=ctx.state,
+            )
 
         # Phase 4: Assembly agents
         if agent_name == "section_writer":
