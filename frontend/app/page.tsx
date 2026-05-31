@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
-type Depth = "brief" | "deep" | "custom" | "value";
+type Depth = "brief" | "deep" | "custom" | "value" | "scan";
 
 const PIPELINE_PHASES = [
   { id: "p1", num: "01", name: "数据聚合", agents: ["行情数据", "财报数据", "公告新闻", "宏观行业"] },
@@ -23,7 +23,13 @@ const ALL_AGENTS = PIPELINE_PHASES.flatMap((p) => p.agents);
 
 const SUGGESTIONS = ["贵州茅台", "宁德时代", "AAPL", "五粮液", "MSFT", "恒瑞医药"];
 
+const QUICK_SCAN_PHASES = [
+  { id: "s1", num: "01", name: "数据聚合", agents: ["行情", "财报", "技术指标", "资金流向", "新闻"] },
+  { id: "s2", num: "02", name: "LLM 总结", agents: ["一句话买卖建议"] },
+];
+
 const DEPTHS: { id: Depth; name: string; time: string; desc: string; template: string }[] = [
+  { id: "scan", name: "快速扫描", time: "约 30s", desc: "技术面 + 资金面 + 一句话 LLM 总结。单页卡片。6 Agent。", template: "quick_scan" },
   { id: "value", name: "价值投资", time: "约 3min", desc: "段永平×芒格双重视角：商业模式 + 本分 + 逆向风险 + Yes/No/Too Hard 判定。8 章。", template: "value_investor" },
   { id: "deep", name: "深度研报", time: "约 2min", desc: "全流程分析：四阶段管线、牛熊辩论、完整估值模型。14 Agent。", template: "deep_dive_default" },
   { id: "brief", name: "快速简报", time: "约 45s", desc: "精简版：核心财务 + 简要估值 + 关键风险。6 Agent 管线。", template: "deep_dive_default" },
@@ -282,7 +288,7 @@ export default function HomePage() {
 
       {/* Pipeline preview */}
       <div className="flex items-start justify-center gap-0 mt-8">
-        {(depth === "value" ? VALUE_PIPELINE_PHASES : PIPELINE_PHASES).map((p, i) => (
+        {(depth === "scan" ? QUICK_SCAN_PHASES : depth === "value" ? VALUE_PIPELINE_PHASES : PIPELINE_PHASES).map((p, i) => (
           <div key={p.id} className="flex items-start gap-0">
             {i > 0 && <div className="px-1 py-2 text-xs text-border">→</div>}
             <div className="text-center w-16">

@@ -11,6 +11,11 @@ const INITIAL_PHASES = [
   { id: "p4", num: "04", name: "统稿排版", agents: ["章节撰写","图表生成","标题摘要"] },
 ];
 
+const SCAN_PHASES = [
+  { id: "s1", num: "01", name: "数据聚合", agents: ["行情","财报","技术指标","资金流向","新闻"] },
+  { id: "s2", num: "02", name: "LLM 总结", agents: ["一句话买卖建议"] },
+];
+
 const VALUE_PHASES = [
   { id: "v1", num: "01", name: "数据聚合", agents: ["行情数据","财报数据","公告新闻","宏观行业"] },
   { id: "v2", num: "02", name: "财务分析", agents: ["财务分析","估值建模","行业竞争","公司治理"] },
@@ -36,7 +41,8 @@ function ProgressContent() {
   const depth = params.get("depth") || "deep";
   const template = params.get("template") || "deep_dive_default";
   const isValue = template === "value_investor";
-  const phases = isValue ? VALUE_PHASES : INITIAL_PHASES;
+  const isScan = template === "quick_scan";
+  const phases = isScan ? SCAN_PHASES : isValue ? VALUE_PHASES : INITIAL_PHASES;
 
   const [phase, setPhase] = useState(0);
   const [logs, setLogs] = useState<string[]>([`▶ 开始分析 ${ticker}…`]);
@@ -124,7 +130,7 @@ function ProgressContent() {
       </div>
 
       {/* Phase cards */}
-      <div className={`grid gap-2.5 mb-7 ${isValue ? 'grid-cols-5' : 'grid-cols-4'}`}>
+      <div className={`grid gap-2.5 mb-7 ${isScan ? 'grid-cols-2' : isValue ? 'grid-cols-5' : 'grid-cols-4'}`}>
         {phases.map((p, i) => (
           <div key={p.id} className={`p-3.5 relative ${
             i < phase ? "bg-bg-surface border border-data-positive" :
