@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 type Section = { title: string; content: string };
 type NewsItem = { title: string; summary: string; date: string; source: string };
-type ScanCard = { ticker: string; company_name: string; price: number; overall: string; summary: string; tech: Record<string,unknown> };
+type ScanCard = { ticker: string; company_name: string; price: number; change_pct: number; pe: number; overall: string; summary: string; tech: Record<string,unknown> };
 
 /* ── Mock data (fallback when no backend) ── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,10 +62,14 @@ const [loading, setLoading] = useState(!!taskId);
           const qs = raw.quick_summary.result || {};
           const tech = raw?.tech_indicators?.result?.signals || {};
           const price = raw?.price_data?.result?.price_summary || {};
+          const ps = raw?.price_data?.result?.price_summary || {};
+          const fin = raw?.financial_data?.result || {};
           setScanData({
             ticker: qs.ticker || ticker,
             company_name: qs.company_name || ticker,
-            price: tech.latest_price || price.latest_price || 0,
+            price: tech.latest_price || ps.latest_price || 0,
+            change_pct: ps.change_pct || ps.returns?.["1d"] || 0,
+            pe: fin.pe || fin.pe_ratio || ps.pe || 0,
             overall: tech.trend || "?",
             summary: qs.summary || "数据不足",
             tech,
@@ -135,8 +139,22 @@ const [loading, setLoading] = useState(!!taskId);
             <div className="font-serif text-[22px] font-bold text-ink-primary">{scanData.company_name}</div>
             <div className="font-mono text-[11px] text-ink-tertiary">{scanData.ticker}</div>
           </div>
-          <div className="font-display text-[36px] font-bold text-ink-primary">{scanData.price.toLocaleString()}</div>
+          <div className="text-right">
+            <div className="font-display text-[36px] font-bold text-ink-primary leading-none">{scanData.price.toLocaleString()}</div>
+            {scanData.change_pct !== 0 && (
+              <div className={`font-mono text-[12px] mt-0.5 ${scanData.change_pct > 0 ? 'text-data-positive' : 'text-accent'}`}>
+                {scanData.change_pct > 0 ? '+' : ''}{scanData.change_pct.toFixed(2)}%
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Key metrics */}
+        {scanData.pe > 0 && (
+          <div className="text-center mb-3 font-mono text-[11px] text-ink-tertiary">
+            PE: {scanData.pe.toFixed(1)}
+          </div>
+        )}
 
         {/* Tech signals */}
         <div className="grid grid-cols-4 gap-2 mb-4">
