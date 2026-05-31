@@ -31,17 +31,16 @@ class TradingAgentsProvider(DataProvider):
     async def health_check(self) -> bool:
         if self._available is not None:
             return self._available
+        # Fast check: just test connectivity, don't call slow TCP APIs
         try:
-            from tradingagents.dataflows.a_stock import get_stock_data, _normalize_ticker
-            code = _normalize_ticker("600519")
-            # Fast health check: just try getting 3 days of data via Sina HTTP
-            result = get_stock_data(code, date.today() - timedelta(days=5), date.today())
-            self._available = isinstance(result, str) and "Date,Open" in result
+            import requests
+            r = requests.get("https://qt.gtimg.cn/q=sh600519", timeout=5,
+                            headers={"User-Agent": "Mozilla/5.0"})
+            self._available = r.status_code == 200 and len(r.text) > 100
             if self._available:
-                logger.info("TradingAgents provider healthy (Sina HTTP)")
+                logger.info("TradingAgents provider healthy (Tencent HTTP)")
             return self._available
-        except Exception as e:
-            logger.warning(f"TradingAgents health check failed: {e}")
+        except Exception:
             self._available = False
             return False
 
