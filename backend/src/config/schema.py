@@ -62,7 +62,7 @@ class PipelineConfig(BaseModel):
 
 class AgentConfig(BaseModel):
     """Agent-specific configuration."""
-    llm: str  # llm_providers key
+    llm: Optional[str] = None  # llm_providers key (None for data-only agents)
     python_calculator: Optional[str] = None
     tools: list[str] = Field(default_factory=list)
     output_schema: str

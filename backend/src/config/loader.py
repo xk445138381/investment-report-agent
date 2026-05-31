@@ -91,6 +91,8 @@ def validate_config_references(config: Config) -> None:
     # Check agent → llm_provider references
     known_llm_providers = set(config.llm_providers.keys())
     for agent_name, agent_cfg in config.agents.items():
+        if not agent_cfg.llm:
+            continue  # data-only agents don't need LLM
         if agent_cfg.llm not in known_llm_providers:
             raise ValueError(
                 f"Agent '{agent_name}' references unknown llm_provider "
@@ -133,7 +135,7 @@ class LLMRegistry:
             return self._models[agent_name]
 
         agent_cfg = self._config.agents.get(agent_name)
-        if agent_cfg is None:
+        if agent_cfg is None or not agent_cfg.llm:
             # Fall back to default quick provider
             provider_id = "provider_quick"
         else:
