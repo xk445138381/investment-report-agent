@@ -112,10 +112,21 @@ async def _run_generation(task_id, req, orchestrator, route_result, resolved_tic
                             prices = await qv.get_prices(resolved_ticker, start, end)
                             logger.info(f"QVeris: got {len(prices)} price records for {resolved_ticker}")
                         if not financials:
-                            financials = await qv.get_financials(resolved_ticker, years=3)
+                            financials = await qv.get_financials(resolved_ticker, years=3) or []
                             logger.info(f"QVeris: got {len(financials)} financial records for {resolved_ticker}")
                 except Exception as e:
                     logger.info(f"QVeris not available: {e}")
+
+            # 2.5 CN: Try TradingAgents for financials (small-caps not in QVeris)
+            if is_cn and not financials:
+                try:
+                    from providers.tradingagents_provider import TradingAgentsProvider
+                    ta = TradingAgentsProvider()
+                    if await ta.health_check():
+                        financials = await ta.get_financials(resolved_ticker, years=3) or []
+                        logger.info(f"TradingAgents: got {len(financials)} financial records for {resolved_ticker}")
+                except Exception as e:
+                    logger.info(f"TradingAgents financials not available: {e}")
 
             # 3. Final fallback: AkShare
             if not prices or not financials:

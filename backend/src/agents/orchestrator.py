@@ -95,6 +95,15 @@ class Orchestrator:
                 result["ticker"] = us_match.group(1)
                 result["company_name"] = us_match.group(1)
 
+        # Try 6-digit CN stock code without suffix (002472 -> 002472.SZ, 600519 -> 600519.SH)
+        if not result["ticker"]:
+            cn_code = re.search(r'(\d{6})', user_message)
+            if cn_code:
+                code = cn_code.group(1)
+                suffix = ".SH" if code.startswith("6") else ".SZ"
+                result["ticker"] = code + suffix
+                result["company_name"] = code + suffix
+
         # Try Chinese company name after action keywords
         if not result["ticker"]:
             name_match = re.search(
@@ -109,7 +118,25 @@ class Orchestrator:
         if result["ticker"] and (not result["company_name"] or result["company_name"] == result["ticker"]):
             try:
                 from providers.qveris_provider import COMPANY_NAMES
-                result["company_name"] = COMPANY_NAMES.get(result["ticker"], result["company_name"])
+                name = COMPANY_NAMES.get(result["ticker"])
+                if name:
+                    result["company_name"] = name
+                else:
+                    # Try Sina HTTP for CN stock name (fast, works for all A-shares)
+                    try:
+                        import requests
+                        code = result["ticker"].split(".")[0]
+                        prefix = "sh" if code.startswith("6") else "sz"
+                        r = requests.get(f"https://hq.sinajs.cn/list={prefix}{code}",
+                                        headers={"Referer": "https://finance.sina.com.cn"},
+                                        timeout=5)
+                        if r.status_code == 200 and '="' in r.text:
+                            # Format: var hq_str_sh600519="贵州茅台,1680.00,..."
+                            parts = r.text.split('="')[1].split(",")
+                            if parts and parts[0]:
+                                result["company_name"] = parts[0]
+                    except Exception:
+                        pass
             except ImportError:
                 pass
 

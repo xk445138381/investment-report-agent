@@ -13,7 +13,7 @@ async def run_quick_summary(ticker, company_name, ctx_state=None):
     fund = ctx.get("fund_flow", {}).get("result", {})
     fin = ctx.get("financial_data", {}).get("result", {})
 
-    # Build minimal context
+    # Build context for LLM
     signals = tech.get("signals", {})
     ps = price.get("price_summary", {})
     latest = ps.get("latest_price", signals.get("latest_price", 0))
@@ -21,19 +21,24 @@ async def run_quick_summary(ticker, company_name, ctx_state=None):
     rsi = signals.get("rsi", 0)
     rsi_s = signals.get("rsi_signal", "?")
     vol_s = signals.get("volume_signal", "?")
+    macd = signals.get("macd_signal", "?")
 
-    price_str = f"价格 {latest}" if latest else ""
-    tech_str = f"趋势{trend} RSI{rsi}({rsi_s}) {vol_s}" if trend else ""
-    fund_str = str(fund.get("flow", {}))[:200] if fund else ""
+    # Include financial data if available
+    ratios = fin.get("ratios", {})
+    fin_str = ""
+    if ratios:
+        parts = []
+        if ratios.get("roe"): parts.append(f"ROE: {ratios['roe']*100:.1f}%")
+        if ratios.get("debt_to_equity"): parts.append(f"负债比: {ratios['debt_to_equity']:.2f}")
+        fin_str = " | ".join(parts)
 
-    prompt = f"""你是段永平的简化版助手。用一句话（不超过50字）评估这只股票，要包含：生意模式能不能看懂 + 当前价格位置 + 一句话买卖建议。
+    prompt = f"""你是A股短线分析助手。根据以下数据给这只股票一个100字以内的判断，覆盖三点：1) 技术面位置（趋势+RSI+MACD意味着什么） 2) 财务面（如果有ROE和负债数据） 3) 操作建议方向。
 
-股票: {ticker} {company_name}
-{price_str}
-{tech_str}
-资金面: {fund_str}
+{ticker} {company_name}
+价格: {latest} | 趋势: {trend} | RSI: {rsi}({rsi_s}) | MACD: {macd} | 量能: {vol_s}
+{fin_str}
 
-直接输出一句话，不要解释。"""
+只输出一段分析，不要标题和格式。"""
 
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if not api_key:
