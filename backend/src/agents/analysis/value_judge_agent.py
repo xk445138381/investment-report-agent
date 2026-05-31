@@ -101,12 +101,47 @@ def _build_judge_prompt(ctx):
 
 
 def _parse_judge_response(text, ticker, company_name):
-    return {
+    result = {
         "ticker": ticker, "company_name": company_name,
-        "verdict": "HOLD",
-        "analysis": text,
-        "length": len(text),
+        "verdict": "HOLD", "verdict_confidence": 50,
+        "analysis": text, "length": len(text),
+        "consensus": "", "disagreement": "",
+        "price_range": "", "position_sizing": "",
     }
+    # Parse verdict from text (LLM should have labeled it)
+    t = text.lower()
+    if "yes" in t and ("可买" in text or "买入" in text or "判定" in text):
+        result["verdict"] = "Yes"
+        result["verdict_confidence"] = 75
+    elif "no" in t and ("不买" in text or "不投" in text):
+        result["verdict"] = "No"
+        result["verdict_confidence"] = 70
+    elif "too hard" in t or "太难" in text:
+        result["verdict"] = "Too Hard"
+        result["verdict_confidence"] = 60
+    else:
+        # Fallback keyword matching
+        if any(kw in text for kw in ["买入", "低估", "安全边际足", "值得买"]):
+            result["verdict"] = "Yes"
+            result["verdict_confidence"] = 70
+        elif any(kw in text for kw in ["卖出", "高估", "不买", "不投"]):
+            result["verdict"] = "No"
+            result["verdict_confidence"] = 70
+    # Extract consensus
+    for marker in ["共识：", "共识:", "**共识**"]:
+        if marker in text:
+            parts = text.split(marker, 1)
+            if len(parts) > 1:
+                result["consensus"] = parts[1].split("\n")[0].strip()[:100]
+            break
+    # Extract price range
+    import re
+    price_match = re.search(r'[低於于]+\s*(\d+)[\s\-~至]*(\d+)?', text)
+    if price_match:
+        lo = price_match.group(1)
+        hi = price_match.group(2) or "?"
+        result["price_range"] = f"低于 {lo} 买入" + (f"，低于 {hi} 重仓" if hi != "?" else "")
+    return result
 
 
 def _judge_fallback(ticker, company_name, ctx):
