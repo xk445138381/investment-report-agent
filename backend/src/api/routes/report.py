@@ -78,7 +78,7 @@ async def _run_generation(task_id, req, orchestrator, route_result, resolved_tic
             config=config,
         )
 
-        # Pre-fetch data: QVeris → AkShare → continue without data
+        # Pre-fetch data: TradingAgents(CN) → QVeris → AkShare → continue
         try:
             from datetime import date as dt_date
             end = dt_date.today()
@@ -86,19 +86,38 @@ async def _run_generation(task_id, req, orchestrator, route_result, resolved_tic
             prices = []
             financials = []
 
-            # 1. Try QVeris first (routes through qveris.ai → THS iFinD / Alpha Vantage)
-            try:
-                from providers.qveris_provider import QverisProvider
-                qv = QverisProvider()
-                if await qv.health_check():
-                    prices = await qv.get_prices(resolved_ticker, start, end)
-                    logger.info(f"QVeris: got {len(prices)} price records for {resolved_ticker}")
-                    financials = await qv.get_financials(resolved_ticker, years=3)
-                    logger.info(f"QVeris: got {len(financials)} financial records for {resolved_ticker}")
-            except Exception as e:
-                logger.info(f"QVeris not available: {e}")
+            # Determine market for CN routing
+            is_cn = ".SH" in resolved_ticker.upper() or ".SZ" in resolved_ticker.upper()
 
-            # 2. Fall back to AkShare if QVeris returned no data
+            # 1. CN: Try TradingAgents-astock first (direct HTTP, fastest for A-shares)
+            if is_cn:
+                try:
+                    from providers.tradingagents_provider import TradingAgentsProvider
+                    ta = TradingAgentsProvider()
+                    if await ta.health_check():
+                        prices = await ta.get_prices(resolved_ticker, start, end)
+                        logger.info(f"TradingAgents: got {len(prices)} price records for {resolved_ticker}")
+                        financials = await ta.get_financials(resolved_ticker, years=3)
+                        logger.info(f"TradingAgents: got {len(financials)} financial records for {resolved_ticker}")
+                except Exception as e:
+                    logger.info(f"TradingAgents not available: {e}")
+
+            # 2. CN fallback / non-CN primary: QVeris
+            if not prices or not financials:
+                try:
+                    from providers.qveris_provider import QverisProvider
+                    qv = QverisProvider()
+                    if await qv.health_check():
+                        if not prices:
+                            prices = await qv.get_prices(resolved_ticker, start, end)
+                            logger.info(f"QVeris: got {len(prices)} price records for {resolved_ticker}")
+                        if not financials:
+                            financials = await qv.get_financials(resolved_ticker, years=3)
+                            logger.info(f"QVeris: got {len(financials)} financial records for {resolved_ticker}")
+                except Exception as e:
+                    logger.info(f"QVeris not available: {e}")
+
+            # 3. Final fallback: AkShare
             if not prices or not financials:
                 try:
                     from providers.akshare_provider import AkShareProvider
