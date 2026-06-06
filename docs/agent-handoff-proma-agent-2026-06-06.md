@@ -34,17 +34,19 @@ This handoff covers all 8 work packages defined in `docs/launch-remaining-work-2
 
 ### Commits (local branch, ahead of origin/master)
 ```
-2fcd03f chore: update release manifest timestamp for commit 2b35867
-2b35867 chore: update release manifest to commit de4accb
-de4accb chore: add workflow files, components.json, agent handoff report; gitignore cleanup
-6b376b2 chore: launch-readiness final (without workflow files, no workflow scope) [pushed]
+fd1c15e chore: update release manifest to commit 5912ffc
+5912ffc chore: update agent handoff report - split WP1, fix gitignore, clean manifest
+a354488 chore: add workflow files, components.json, agent handoff report; gitignore cleanup
+80c460f chore: add CI workflow
+e9608b2 chore: add deploy-verify workflow
+6b376b2 chore: launch-readiness final (without workflow files, no workflow scope)
 ```
 
 ### Files Modified (tracked)
 | File | Change |
 |---|---|
 | `.gitignore` | Added exclusions for `tradingagents-cn/`, `UsersAdmin*/`, `superpowers/`, `design-*.html`, `shot_homepage.png` |
-| `docs/release-manifest-latest.json` | Regenerated with `dirty=false`, commit `2b35867` |
+| `docs/release-manifest-latest.json` | Regenerated with `dirty=false`, commit `5912ffc` |
 
 ### Files Created (new, in PR)
 | File | Description |
@@ -152,8 +154,8 @@ Route (app)
 
 | Item | Location/Status |
 |---|---|
-| Clean git status | Working tree clean, commit `2fcd03f` |
-| Release manifest | `docs/release-manifest-latest.json` (commit `2b35867`, dirty=false) |
+| Clean git status | Working tree clean, commit `fd1c15e` |
+| Release manifest | `docs/release-manifest-latest.json` (commit `5912ffc`, dirty=false) |
 | Launch readiness report | `docs/launch-readiness-2026-06-05.md` |
 | Deployment runbook | `docs/deployment-runbook-2026-06-05.md` |
 | Test report | `docs/test-report-2026-06-04.md` |
@@ -204,7 +206,7 @@ Route (app)
    - No managed production secret store → `/ready` validates required env vars
    - Hosted observability not wired → `/metrics` exposed, needs scraping/dashboard setup
 
-6. **Release manifest** — Regenerated and clean (`docs/release-manifest-latest.json`, dirty=false, commit `2b35867`).
+6. **Release manifest** — Regenerated and clean (`docs/release-manifest-latest.json`, dirty=false, commit `5912ffc`).
 
 ---
 
@@ -223,7 +225,7 @@ Route (app)
 
 **PASS: Release Hygiene (WP8)**
 - `git status --short`: empty (clean working tree)
-- `release-manifest-latest.json`: dirty=false
+- `release-manifest-latest.json`: dirty=false, commit `5912ffc`
 - All local checks: launch_check 10/10, predeploy static PASS, repo safety PASS
 - Unwanted files gitignored: tradingagents-cn/, superpowers/, design artifacts
 
