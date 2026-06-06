@@ -1,8 +1,8 @@
 {
   "version": "deployable-candidate",
-  "created_at": "2026-06-06T12:28:11.645737+00:00",
+  "created_at": "2026-06-06T12:45:00.027966+00:00",
   "git": {
-    "commit": "6b376b252d01746f4282b5bbd759b10d42e37f31",
+    "commit": "de4accbbd6bcf462aa8c895f4b8f2673d43a7608",
     "branch": "chore/ci-verify-2026-06-06",
     "dirty": true
   },
