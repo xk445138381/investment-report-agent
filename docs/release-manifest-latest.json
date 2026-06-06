@@ -1,10 +1,10 @@
 {
   "version": "deployable-candidate",
-  "created_at": "2026-06-06T12:45:00.027966+00:00",
+  "created_at": "2026-06-06T12:45:05.841950+00:00",
   "git": {
-    "commit": "de4accbbd6bcf462aa8c895f4b8f2673d43a7608",
+    "commit": "2b358678f7f76344c39ab2865b12b3785170ca6e",
     "branch": "chore/ci-verify-2026-06-06",
-    "dirty": true
+    "dirty": false
   },
   "artifacts": {
     "backend_image": "Dockerfile.backend",
