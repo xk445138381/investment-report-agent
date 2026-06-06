@@ -42,3 +42,14 @@ reports_output/
 .agents/
 .claude/
 skills-lock.json
+
+# External cloned repos
+tradingagents-cn/
+UsersAdmin*/
+
+# Separate project (AI enhancement tools)
+superpowers/
+
+# Design exploration artifacts
+frontend/design-*.html
+frontend/shot_homepage.png
