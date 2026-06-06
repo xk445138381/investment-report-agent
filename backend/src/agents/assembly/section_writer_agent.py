@@ -1,28 +1,49 @@
 """Section Writer Agent — assembles agent outputs into report sections.
 
-When LLM is available: uses DeepSeek to write professional financial prose.
-When LLM falls back: generates detailed structured content from available data.
+New: Uses LLM-driven report engine for professional-quality output.
+Fallback: Original data-driven templates if LLM unavailable.
 """
 
+import logging
 from datetime import date
+
+logger = logging.getLogger(__name__)
 
 
 async def run_section_writer(ticker, company_name, ctx_state, template_id="deep_dive_default"):
-    """Produce structured report sections from all upstream agent outputs."""
+    """Produce structured report sections from all upstream agent outputs.
+    
+    Priority order:
+    1. New LLM-driven report engine (report_engine.py)
+    2. Original data-driven templates (fallback)
+    """
+    # Try new LLM-driven engine first
+    try:
+        from agents.assembly.report_engine import write_report
+        result = await write_report(ticker, company_name, ctx_state, template_id)
+        if result and result.get("sections"):
+            logger.info(f"✅ LLM-driven report generated for {ticker}")
+            return result
+    except Exception as e:
+        logger.warning(f"LLM report engine failed, falling back: {e}")
+    
+    # Fallback: original templates
+    return _fallback_template(ticker, company_name, ctx_state, template_id)
+
+
+def _fallback_template(ticker, company_name, ctx_state, template_id="deep_dive_default"):
+    """Original data-driven template fallback."""
     fin_analysis = ctx_state.get("financial_analysis", {}).get("result", {})
     valuation = ctx_state.get("valuation", {}).get("result", {})
     price_data = ctx_state.get("price_data", {}).get("result", {})
     judge = ctx_state.get("risk_judge", {}).get("result", {})
     financials = ctx_state.get("financial_data", {}).get("result", {})
-    macro = ctx_state.get("macro_data", {}).get("result", {})
     gov = ctx_state.get("corporate_governance", {}).get("result", {})
     industry = ctx_state.get("industry_competition", {}).get("result", {})
 
-    # Route to value investing template
     if "value_investor" in template_id:
         return _render_value_template(ticker, company_name, ctx_state, fin_analysis, valuation, gov, industry, financials)
 
-    # Original deep_dive template
     current_price = _n(valuation.get("current_price")) or _n(valuation.get("weighted_value", 0))
     upside = _n(valuation.get("weighted_upside_pct", 0))
     target = _n(valuation.get("weighted_value", 0))

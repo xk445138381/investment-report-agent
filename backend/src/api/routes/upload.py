@@ -1,6 +1,7 @@
 """File upload API endpoints."""
 
 import os
+import re
 from pathlib import Path
 from uuid import uuid4
 from fastapi import APIRouter, UploadFile, HTTPException
@@ -23,6 +24,16 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 _uploads: dict = {}
 
 
+def _safe_filename(filename: str | None) -> str:
+    raw = (filename or "upload").replace("\\", "/").split("/")[-1].strip()
+    stem = Path(raw).stem
+    suffix = Path(raw).suffix.lower()
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._-")
+    if not safe_stem:
+        safe_stem = "upload"
+    return f"{safe_stem}{suffix}"
+
+
 def _validate_file(filename: str, content_type: str, size: int):
     ext = Path(filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -33,18 +44,26 @@ def _validate_file(filename: str, content_type: str, size: int):
         raise HTTPException(400, f"Unsupported MIME type: {content_type}")
 
 
+async def _read_limited_upload(file: UploadFile) -> bytes:
+    content = await file.read(MAX_FILE_SIZE + 1)
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, f"File too large: > {MAX_FILE_SIZE} bytes")
+    return content
+
+
 @router.post("/upload", status_code=201)
 async def upload_file(file: UploadFile):
-    content = await file.read()
-    _validate_file(file.filename or "unknown", file.content_type or "", len(content))
+    content = await _read_limited_upload(file)
+    filename = _safe_filename(file.filename)
+    _validate_file(filename, file.content_type or "", len(content))
 
     fid = str(uuid4())
-    file_path = UPLOAD_DIR / f"{fid}_{file.filename}"
+    file_path = UPLOAD_DIR / f"{fid}_{filename}"
     file_path.write_bytes(content)
 
     _uploads[fid] = {
         "file_id": fid,
-        "filename": file.filename,
+        "filename": filename,
         "size_bytes": len(content),
         "content_type": file.content_type,
         "file_path": str(file_path),

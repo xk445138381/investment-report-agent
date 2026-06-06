@@ -26,23 +26,15 @@
       "timeout_seconds": 60,
       "note": "DeepSeek V4 Pro — 数据聚合、摘要、图表"
     },
-    "provider_heavy": {
-      "provider": "openai",
-      "model": "gpt-4o",
-      "temperature": 0.4,
-      "max_tokens": 8000,
-      "api_key_source": "env:OPENAI_API_KEY",
-      "timeout_seconds": 120,
-      "note": "GPT-4o — 段永平/芒格视角评估（重度推理）"
-    },
     "provider_heavy_claude": {
-      "provider": "anthropic",
-      "model": "claude-sonnet-4-6",
+      "provider": "openai",
+      "model": "minimax-m3",
       "temperature": 0.4,
       "max_tokens": 8000,
-      "api_key_source": "env:ANTHROPIC_API_KEY",
+      "api_key_source": "env:MINIMAX_API_KEY",
+      "base_url": "https://api.minimaxi.com/v1",
       "timeout_seconds": 120,
-      "note": "Claude Sonnet 4.6 — 段永平/芒格视角评估备选"
+      "note": "MiniMax M3 — 段永平/芒格视角评估"
     }
   },
   "pipelines": {
@@ -51,11 +43,19 @@
       "phases": {
         "phase_1": {
           "parallel": true,
-          "agents": ["price_data", "financial_data", "tech_indicators", "fund_flow", "news_data"]
+          "agents": [
+            "price_data",
+            "financial_data",
+            "tech_indicators",
+            "fund_flow",
+            "news_data"
+          ]
         },
         "phase_2": {
           "parallel": false,
-          "agents": ["quick_summary"],
+          "agents": [
+            "quick_summary"
+          ],
           "debate_rounds": 1
         }
       }
@@ -65,26 +65,47 @@
       "phases": {
         "phase_1": {
           "parallel": true,
-          "agents": ["price_data", "financial_data", "news_data", "macro_data"]
+          "agents": [
+            "price_data",
+            "financial_data",
+            "news_data",
+            "macro_data"
+          ]
         },
         "phase_2": {
           "parallel": true,
-          "agents": ["financial_analysis", "valuation", "industry_competition", "corporate_governance"]
+          "agents": [
+            "financial_analysis",
+            "valuation",
+            "industry_competition",
+            "corporate_governance"
+          ]
         },
         "phase_3": {
           "parallel": true,
-          "agents": ["duan_case", "munger_case"],
+          "agents": [
+            "duan_case",
+            "munger_case"
+          ],
           "debate_rounds": 1
         },
         "phase_3b": {
           "parallel": false,
-          "agents": ["value_judge"],
+          "agents": [
+            "value_judge"
+          ],
           "debate_rounds": 1
         },
         "phase_4": {
           "parallel": false,
-          "agents": ["section_writer", "chart_generator", "title_summary"],
-          "export": ["pdf"]
+          "agents": [
+            "section_writer",
+            "chart_generator",
+            "title_summary"
+          ],
+          "export": [
+            "pdf"
+          ]
         }
       }
     },
@@ -93,21 +114,41 @@
       "phases": {
         "phase_1": {
           "parallel": true,
-          "agents": ["price_data", "financial_data", "news_data", "macro_data"]
+          "agents": [
+            "price_data",
+            "financial_data",
+            "news_data",
+            "macro_data"
+          ]
         },
         "phase_2": {
           "parallel": true,
-          "agents": ["financial_analysis", "valuation", "industry_competition", "corporate_governance"]
+          "agents": [
+            "financial_analysis",
+            "valuation",
+            "industry_competition",
+            "corporate_governance"
+          ]
         },
         "phase_3": {
           "parallel": false,
-          "agents": ["bull_case", "bear_case", "risk_judge"],
+          "agents": [
+            "bull_case",
+            "bear_case",
+            "risk_judge"
+          ],
           "debate_rounds": 2
         },
         "phase_4": {
           "parallel": false,
-          "agents": ["section_writer", "chart_generator", "title_summary"],
-          "export": ["pdf"]
+          "agents": [
+            "section_writer",
+            "chart_generator",
+            "title_summary"
+          ],
+          "export": [
+            "pdf"
+          ]
         }
       }
     },
@@ -116,50 +157,161 @@
       "phases": {
         "phase_1": {
           "parallel": true,
-          "agents": ["price_data", "financial_data", "news_data"]
+          "agents": [
+            "price_data",
+            "financial_data",
+            "news_data"
+          ]
         },
         "phase_2": {
           "parallel": true,
-          "agents": ["financial_analysis", "valuation"]
+          "agents": [
+            "financial_analysis",
+            "valuation"
+          ]
         },
         "phase_3": {
           "parallel": false,
-          "agents": ["bull_case", "bear_case", "risk_judge"],
+          "agents": [
+            "bull_case",
+            "bear_case",
+            "risk_judge"
+          ],
           "debate_rounds": 1
         },
         "phase_4": {
           "parallel": false,
-          "agents": ["section_writer", "title_summary"],
-          "export": ["pdf"]
+          "agents": [
+            "section_writer",
+            "title_summary"
+          ],
+          "export": [
+            "pdf"
+          ]
         }
       }
     }
   },
   "agents": {
-    "price_data": {"output_schema": "PriceDataResult", "timeout_seconds": 60, "note": "纯数据——不需要LLM"},
-    "financial_data": {"output_schema": "FinancialDataResult", "timeout_seconds": 60, "note": "纯数据——不需要LLM"},
-    "news_data": {"output_schema": "NewsAggregation", "timeout_seconds": 60, "note": "纯数据——不需要LLM"},
-    "macro_data": {"output_schema": "MacroDataResult", "timeout_seconds": 60, "note": "纯数据——不需要LLM"},
-    "tech_indicators": {"output_schema": "TechIndicatorResult", "timeout_seconds": 30, "note": "纯计算——不需要LLM"},
-    "fund_flow": {"output_schema": "FundFlowResult", "timeout_seconds": 30, "note": "纯数据——不需要LLM"},
-    "financial_analysis": {"llm": "provider_deep", "python_calculator": "financial_health_calculator", "output_schema": "FinancialHealthResult", "timeout_seconds": 120},
-    "valuation": {"llm": "provider_deep", "python_calculator": "valuation_engine", "output_schema": "ValuationResult", "timeout_seconds": 180},
-    "industry_competition": {"llm": "provider_deep", "output_schema": "IndustryCompetitionResult", "timeout_seconds": 120},
-    "corporate_governance": {"llm": "provider_deep", "output_schema": "GovernanceResult", "timeout_seconds": 120},
-    "bull_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 25},
-    "bear_case": {"llm": "provider_deep", "tools": ["query_additional_data"], "output_schema": "DebateArguments", "timeout_seconds": 25},
-    "risk_judge": {"llm": "provider_deep", "output_schema": "RiskJudgeResult", "timeout_seconds": 25},
-    "duan_case": {"llm": "provider_deep", "output_schema": "ValuePerspectiveResult", "timeout_seconds": 300, "note": "段永平视角"},
-    "munger_case": {"llm": "provider_deep", "output_schema": "ValuePerspectiveResult", "timeout_seconds": 300, "note": "芒格视角"},
-    "value_judge": {"llm": "provider_deep", "output_schema": "ValueJudgeResult", "timeout_seconds": 300, "note": "双视角裁决"},
-    "section_writer": {"llm": "provider_deep", "output_schema": "ReportSections", "timeout_seconds": 300},
-    "chart_generator": {"output_schema": "ChartOutputs", "timeout_seconds": 60, "note": "纯计算——不需要LLM"},
-    "title_summary": {"output_schema": "ReportMetadata", "timeout_seconds": 30, "note": "规则即可——不需要LLM"},
-    "quick_summary": {"llm": "provider_deep", "output_schema": "QuickSummaryResult", "timeout_seconds": 90, "note": "一句话LLM总结"}
+    "price_data": {
+      "output_schema": "PriceDataResult",
+      "timeout_seconds": 60,
+      "note": "纯数据——不需要LLM"
+    },
+    "financial_data": {
+      "output_schema": "FinancialDataResult",
+      "timeout_seconds": 60,
+      "note": "纯数据——不需要LLM"
+    },
+    "news_data": {
+      "output_schema": "NewsAggregation",
+      "timeout_seconds": 60,
+      "note": "纯数据——不需要LLM"
+    },
+    "macro_data": {
+      "output_schema": "MacroDataResult",
+      "timeout_seconds": 60,
+      "note": "纯数据——不需要LLM"
+    },
+    "tech_indicators": {
+      "output_schema": "TechIndicatorResult",
+      "timeout_seconds": 30,
+      "note": "纯计算——不需要LLM"
+    },
+    "fund_flow": {
+      "output_schema": "FundFlowResult",
+      "timeout_seconds": 30,
+      "note": "纯数据——不需要LLM"
+    },
+    "financial_analysis": {
+      "llm": "provider_deep",
+      "python_calculator": "financial_health_calculator",
+      "output_schema": "FinancialHealthResult",
+      "timeout_seconds": 120
+    },
+    "valuation": {
+      "llm": "provider_deep",
+      "python_calculator": "valuation_engine",
+      "output_schema": "ValuationResult",
+      "timeout_seconds": 180
+    },
+    "industry_competition": {
+      "llm": "provider_deep",
+      "output_schema": "IndustryCompetitionResult",
+      "timeout_seconds": 120
+    },
+    "corporate_governance": {
+      "llm": "provider_deep",
+      "output_schema": "GovernanceResult",
+      "timeout_seconds": 120
+    },
+    "bull_case": {
+      "llm": "provider_heavy_claude",
+      "tools": [
+        "query_additional_data"
+      ],
+      "output_schema": "DebateArguments",
+      "timeout_seconds": 25
+    },
+    "bear_case": {
+      "llm": "provider_heavy_claude",
+      "tools": [
+        "query_additional_data"
+      ],
+      "output_schema": "DebateArguments",
+      "timeout_seconds": 25
+    },
+    "risk_judge": {
+      "llm": "provider_deep",
+      "output_schema": "RiskJudgeResult",
+      "timeout_seconds": 25
+    },
+    "duan_case": {
+      "llm": "provider_heavy_claude",
+      "output_schema": "ValuePerspectiveResult",
+      "timeout_seconds": 300,
+      "note": "段永平视角（Claude）"
+    },
+    "munger_case": {
+      "llm": "provider_heavy_claude",
+      "output_schema": "ValuePerspectiveResult",
+      "timeout_seconds": 300,
+      "note": "芒格视角（Claude）"
+    },
+    "value_judge": {
+      "llm": "provider_heavy_claude",
+      "output_schema": "ValueJudgeResult",
+      "timeout_seconds": 300,
+      "note": "双视角裁决（Claude）"
+    },
+    "section_writer": {
+      "llm": "provider_deep",
+      "output_schema": "ReportSections",
+      "timeout_seconds": 300
+    },
+    "chart_generator": {
+      "output_schema": "ChartOutputs",
+      "timeout_seconds": 60,
+      "note": "纯计算——不需要LLM"
+    },
+    "title_summary": {
+      "output_schema": "ReportMetadata",
+      "timeout_seconds": 30,
+      "note": "规则即可——不需要LLM"
+    },
+    "quick_summary": {
+      "llm": "provider_deep",
+      "output_schema": "QuickSummaryResult",
+      "timeout_seconds": 90,
+      "note": "一句话LLM总结"
+    }
   },
   "logging": {
     "level": "INFO",
-    "output": ["console", "file"],
+    "output": [
+      "console",
+      "file"
+    ],
     "file_path": "~/.investment_report_agent/logs/agent.log"
   }
 }

@@ -1,13 +1,22 @@
 /**
  * API client for the investment report agent backend.
- * Backend base: http://localhost:8000/api/v1
+ * Override with NEXT_PUBLIC_API_URL in deployed environments.
  */
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+export function apiUrl(path: string): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE}${normalizedPath}`;
+}
+
+export function backendHealthUrl(): string {
+  return API_BASE.replace(/\/api\/v1\/?$/, "/health");
+}
 
 export interface GenerateRequest {
   ticker: string;
-  report_type?: "deep_dive" | "brief";
+  report_type?: string;
   template_id?: string;
 }
 
@@ -28,7 +37,7 @@ export type SSECallback = (event: string, data: string) => void;
 
 /** Start a report generation task */
 export async function generateReport(params: GenerateRequest): Promise<GenerateResponse> {
-  const res = await fetch(`${BASE}/report/generate`, {
+  const res = await fetch(apiUrl("/report/generate"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -46,7 +55,7 @@ export async function generateReport(params: GenerateRequest): Promise<GenerateR
 
 /** Poll task status */
 export async function getTaskStatus(taskId: string): Promise<TaskStatus> {
-  const res = await fetch(`${BASE}/report/${taskId}/status`);
+  const res = await fetch(apiUrl(`/report/${taskId}/status`));
   if (!res.ok) throw new Error("Task not found");
   return res.json();
 }
@@ -57,7 +66,7 @@ export function streamProgress(taskId: string, onEvent: SSECallback): () => void
 
   (async () => {
     try {
-      const res = await fetch(`${BASE}/report/${taskId}/stream`, {
+      const res = await fetch(apiUrl(`/report/${taskId}/stream`), {
         signal: controller.signal,
         headers: { Accept: "text/event-stream" },
       });
@@ -96,7 +105,7 @@ export function streamProgress(taskId: string, onEvent: SSECallback): () => void
 /** Check if the backend is reachable */
 export async function healthCheck(): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/../health`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(backendHealthUrl(), { signal: AbortSignal.timeout(3000) });
     return res.ok;
   } catch {
     return false;

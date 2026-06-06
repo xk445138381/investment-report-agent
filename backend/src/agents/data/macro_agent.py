@@ -39,9 +39,13 @@ async def run_macro_agent(ticker, company_name, prices=None):
             if m2_m: result["macro"]["m2_growth_yoy"] = float(m2_m.group(1))
             if pmi_m: result["macro"]["pmi"] = float(pmi_m.group(1))
             result["note"] = "宏观数据已接入（Caidazi AI 宏观分析）"
+            indicators_found = sum(1 for v in result["macro"].values() if v is not None and v != "")
+            result["data_quality"] = {"source": "Caidazi", "indicators_found": indicators_found, "indicators_total": 4, "quality": "high" if indicators_found >= 3 else "medium" if indicators_found >= 1 else "low"}
         else:
             result["note"] = "宏观分析返回空"
+            result["data_quality"] = {"source": "Caidazi", "indicators_found": 0, "indicators_total": 4, "quality": "low"}
     except Exception as e:
         logger.info(f"Macro via QVeris: {e}")
         result["note"] = "宏观数据待接入（Phase 2）"
+        result["data_quality"] = {"source": "none", "indicators_found": 0, "indicators_total": 4, "quality": "low"}
     return result

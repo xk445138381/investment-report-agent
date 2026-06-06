@@ -2,12 +2,24 @@
 
 import os, json
 from pathlib import Path
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from api.config_accessor import get_config
 
 router = APIRouter(tags=["config"])
 
 _CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config.json"
+
+
+def _env_enabled(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _runtime_config_writes_allowed() -> bool:
+    env = os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")).strip().lower()
+    return env not in {"production", "prod"} or _env_enabled("ENABLE_RUNTIME_CONFIG_WRITES")
 
 
 @router.get("/config")
@@ -49,6 +61,9 @@ async def switch_agent_llm(data: dict):
 
     Body: {"agent_name": "duan_case", "llm_provider": "provider_heavy"}
     """
+    if not _runtime_config_writes_allowed():
+        raise HTTPException(403, "Runtime config writes are disabled in production")
+
     agent_name = data.get("agent_name", "")
     llm_provider = data.get("llm_provider", "")
 

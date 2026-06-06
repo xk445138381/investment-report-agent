@@ -1,6 +1,7 @@
 """T14: Orchestrator agent tests (TDD)."""
 
 import pytest
+import asyncio
 from agents.orchestrator import Orchestrator
 
 
@@ -32,6 +33,13 @@ class TestOrchestratorRouting:
         assert result["company_name"] is not None
 
     @pytest.mark.asyncio
+    async def test_extracts_bare_chinese_company_name(self, orchestrator):
+        result = await orchestrator.route("贵州茅台", {})
+        assert result["ticker"] == "600519.SH"
+        assert result["company_name"] == "贵州茅台"
+        assert result["error"] is None
+
+    @pytest.mark.asyncio
     async def test_unknown_company_returns_error(self, orchestrator):
         result = await orchestrator.route("今天是晴天", {})
         assert result["error"] is not None
@@ -53,3 +61,25 @@ class TestPipelineExecution:
         )
         await orchestrator.execute_pipeline(ctx)
         assert "errors" in dir(ctx) or len(ctx.errors) >= 0
+
+    @pytest.mark.asyncio
+    async def test_agent_timeout_records_failed_state(self, orchestrator, monkeypatch):
+        from agents.orchestrator import AgentContext
+
+        async def slow_dispatch(ctx, agent_name):
+            await asyncio.sleep(1)
+            return {"ok": True}
+
+        monkeypatch.setattr(orchestrator, "_dispatch_agent", slow_dispatch)
+        orchestrator.config.agents["price_data"].timeout_seconds = 0.01
+        ctx = AgentContext(
+            task_id="timeout-test", ticker="AAPL", company_name="Apple Inc.",
+            report_type="deep_dive", template_id="deep_dive_default",
+            config=orchestrator.config,
+        )
+
+        await orchestrator._run_agent(ctx, "price_data", "phase_1")
+
+        assert ctx.state["price_data"]["status"] == "failed"
+        assert ctx.state["price_data"]["result"]["error"] == "timeout"
+        assert ctx.errors[-1]["agent"] == "price_data"

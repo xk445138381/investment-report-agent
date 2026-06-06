@@ -22,6 +22,7 @@ dependencies = [
     "python-multipart>=0.0.12",
     "structlog>=24.0",
     "pyyaml>=6.0",
+    "motor>=3.6",
 ]
 
 [project.optional-dependencies]

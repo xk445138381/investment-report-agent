@@ -1,0 +1,63 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    env_file:
+      - backend/.env
+    environment:
+      ENVIRONMENT: production
+      ENABLE_DEBUG_ROUTES: "false"
+      ENABLE_RUNTIME_CONFIG_WRITES: "false"
+      REQUIRE_MONGODB: "true"
+      REQUIRED_ENV_VARS: SECRET_KEY,DEEPSEEK_API_KEY,QVERIS_API_KEY
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:?Set FRONTEND_ORIGINS to the deployed https frontend origin}
+      MONGODB_HOST: mongo
+      MONGODB_PORT: 27017
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-tradingagents}
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL to the deployed https backend /api/v1 URL}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL to the deployed https backend /api/v1 URL}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:

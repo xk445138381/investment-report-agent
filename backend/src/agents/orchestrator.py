@@ -34,6 +34,7 @@ class AgentContext:
         self.state: dict = {}  # Phase outputs accumulate here
         self.errors: list[dict] = []
         self.progress_callback: Optional[Callable[[str, int, str], Awaitable[None]]] = None
+        self.agent_callback: Optional[Callable[[str, str, str], Awaitable[None]]] = None
         self.created_at = datetime.now()
 
     async def set_progress(self, phase: str, pct: int, message: str):
@@ -41,6 +42,11 @@ class AgentContext:
         logger.info(f"[{self.task_id}] {phase} ({pct}%): {message}")
         if self.progress_callback:
             await self.progress_callback(phase, pct, message)
+
+    async def on_agent_done(self, agent_name: str, status: str = "done", detail: str = ""):
+        """Notify that an agent has completed (for SSE streaming)."""
+        if self.agent_callback:
+            await self.agent_callback(agent_name, status, detail)
 
 
 class Orchestrator:
@@ -73,14 +79,14 @@ class Orchestrator:
         # Detect report type: template-based routing
         if "value_investor" in template_id:
             result["pipeline_type"] = "value_deep_dive"
-        elif "quick_scan" in template_id or any(w in user_message for w in ["扫", "快", "速", "技术"]):
+        elif any(w in user_message for w in ["简报", "快报", "速览", "brief", "快速"]):
+            result["pipeline_type"] = "brief"
+        elif "quick_scan" in template_id or any(w in user_message for w in ["扫一扫", "扫描"]):
             result["pipeline_type"] = "quick_scan"
         elif any(w in user_message for w in ["宏观", "周报"]):
             result["pipeline_type"] = "macro_weekly"
         elif any(w in user_message for w in ["ipo", "新股", "上市"]):
             result["pipeline_type"] = "ipo"
-        elif any(w in user_message for w in ["简报", "快报", "速览", "brief", "快速"]):
-            result["pipeline_type"] = "brief"
 
         # Extract ticker pattern: 600519.SH, 000858.SZ, 0700.HK (HK: 1-5 digits)
         ticker_match = re.search(r'(\d{1,6}\.(?:SH|SZ|HK))', user_message)
@@ -103,6 +109,28 @@ class Orchestrator:
                 suffix = ".SH" if code.startswith("6") else ".SZ"
                 result["ticker"] = code + suffix
                 result["company_name"] = code + suffix
+
+        # Try bare known Chinese company names, e.g. "贵州茅台".
+        if not result["ticker"]:
+            raw_name = user_message.strip()
+            if re.fullmatch(r'[一-鿿A-Za-z0-9·（）()\-]{2,20}', raw_name) and re.search(r'[一-鿿]', raw_name):
+                try:
+                    from providers.qveris_provider import COMPANY_NAMES, HK_NAME_MAP
+                    candidates = []
+                    for mapping in (COMPANY_NAMES, HK_NAME_MAP):
+                        for ticker, name in mapping.items():
+                            if raw_name == name or raw_name in name or name in raw_name:
+                                candidates.append(ticker)
+                    if candidates:
+                        ticker = next((t for t in candidates if "." in t), candidates[0])
+                        if ticker.isdigit() and len(ticker) == 6:
+                            ticker = ticker + (".SH" if ticker.startswith("6") else ".SZ")
+                        elif ticker.isdigit() and len(ticker) <= 5:
+                            ticker = f"{int(ticker):04d}.HK"
+                        result["ticker"] = ticker
+                        result["company_name"] = raw_name
+                except ImportError:
+                    pass
 
         # Try Chinese company name after action keywords
         if not result["ticker"]:
@@ -141,9 +169,13 @@ class Orchestrator:
                 pass
 
         if not result["ticker"] and not result["company_name"]:
-            result["error"] = "无法识别公司名称或股票代码，请提供具体的公司名或代码（如 600519.SH 或 贵州茅台）"
+            # Smart intent recognition — guide users to supported inputs
+            hint = _classify_intent(user_message)
+            result["error"] = hint
 
         return result
+
+    # ── Pipeline execution ─────────────────────────────────────────
 
     async def execute_pipeline(self, ctx: AgentContext) -> dict:
         """Execute the full report generation pipeline.
@@ -191,8 +223,35 @@ class Orchestrator:
         await ctx.set_progress(phase, min(pct, 100), f"执行 {agent_name}")
 
         # ── Dispatch to real agent implementations ──
-        result = await self._dispatch_agent(ctx, agent_name)
-        ctx.state[agent_name] = {"status": "completed", "phase": phase, "result": result}
+        await ctx.on_agent_done(agent_name, "running", "")
+        timeout = getattr(agent_cfg, "timeout_seconds", None) or 120
+        try:
+            result = await asyncio.wait_for(
+                self._dispatch_agent(ctx, agent_name),
+                timeout=timeout,
+            )
+            ctx.state[agent_name] = {"status": "completed", "phase": phase, "result": result}
+            await ctx.on_agent_done(agent_name, "done", "")
+        except asyncio.TimeoutError:
+            detail = f"timeout after {timeout}s"
+            logger.warning(f"[{ctx.task_id}] Agent {agent_name} timed out: {detail}")
+            ctx.errors.append({"agent": agent_name, "phase": phase, "error": detail})
+            ctx.state[agent_name] = {
+                "status": "failed",
+                "phase": phase,
+                "result": {"error": "timeout", "detail": detail},
+            }
+            await ctx.on_agent_done(agent_name, "failed", detail)
+        except Exception as e:
+            detail = str(e)
+            logger.warning(f"[{ctx.task_id}] Agent {agent_name} failed: {detail}", exc_info=True)
+            ctx.errors.append({"agent": agent_name, "phase": phase, "error": detail})
+            ctx.state[agent_name] = {
+                "status": "failed",
+                "phase": phase,
+                "result": {"error": "exception", "detail": detail},
+            }
+            await ctx.on_agent_done(agent_name, "failed", detail[:200])
 
         ctx.state["_internal_pct"] = min(ctx.state.get("_internal_pct", 0) + 10, 100)
 
@@ -362,6 +421,43 @@ class Orchestrator:
             )
 
         return {"note": f"Agent '{agent_name}' not yet implemented (stub)"}
+
+
+# ── Intent classification (module-level, used by Orchestrator.route) ──
+
+def _classify_intent(user_message: str) -> str:
+    """Classify user input and return a helpful redirect message."""
+    msg = user_message.strip()
+
+    sector_kw = ["板块", "行业", "概念", "赛道", "新能源", "芯片", "半导体", "医药",
+                 "白酒", "消费", "银行", "地产", "汽车", "光伏", "军工", "AI",
+                 "人工智能", "机器人", "低空", "算力"]
+    if any(k in msg for k in sector_kw):
+        return (
+            "行业/板块分析功能正在开发中。请先输入具体股票代码进行分析：\n"
+            "• A股: 600519.SH（贵州茅台）、000858.SZ（五粮液）、300750.SZ（宁德时代）\n"
+            "• 港股: 0700.HK（腾讯）、9988.HK（阿里巴巴）\n"
+            "• 美股: AAPL、MSFT、GOOGL"
+        )
+
+    compare_kw = ["对比", "比较", "vs", "VS", "和", "与", "跟", "哪个好"]
+    if any(k in msg for k in compare_kw) and len(msg) < 30:
+        return (
+            "对比模式已支持！请以逗号分隔多个股票代码：\n"
+            "例: 600519.SH,000858.SZ,002304.SZ\n"
+            "或: AAPL,MSFT,GOOGL"
+        )
+
+    topic_kw = ["什么是", "怎么样", "如何", "怎么", "为什么", "能不能", "是什么意思",
+                "投资", "理财", "建议", "推荐", "选股"]
+    if any(k in msg for k in topic_kw):
+        return (
+            "我是投资研究报告生成器，专注于单只股票的多 Agent 深度分析。\n"
+            "请提供具体的股票代码或公司名称，我会为您生成专业研报。\n"
+            "例: 分析贵州茅台 或 600519.SH"
+        )
+
+    return "无法识别公司名称或股票代码，请提供具体的公司名或代码（如 600519.SH 或 贵州茅台）"
 
 
 # ── Top-level entry point ──

@@ -20,13 +20,18 @@ out/
 
 # Env
 .env
+.env.*
 .env.local
+!.env.example
+!**/.env.example
 
 # OS
 .DS_Store
 Thumbs.db
 
 # Project
+*.log
+.launch-*.log
 *.db
 *.sqlite
 cache/
