@@ -9,18 +9,19 @@
 
 ## Scope
 
-This handoff covers all 8 work packages defined in [`docs/launch-remaining-work-2026-06-06.md`](launch-remaining-work-2026-06-06.md) for the `DEPLOYABLE_CANDIDATE` release of the Investment Report Agent.
+This handoff covers all 8 work packages defined in `docs/launch-remaining-work-2026-06-06.md` for the `DEPLOYABLE_CANDIDATE` release of the Investment Report Agent.
 
 | Work Package | Status | Summary |
 |---|---|---|
-| **WP1:** Docker Build And Compose Rehearsal | **PASS** | CI docker-build job: backend + frontend images built (GitHub Actions) |
-| **WP2:** GitHub Actions CI Verification | **PASS** | CI run: launch-check + docker-build both passed. PR: https://github.com/xk445138381/investment-report-agent/pull/1 |
+| **WP1:** Docker Build | **PASS** | CI docker-build job: backend + frontend images built (GitHub Actions) |
+| **WP1:** Docker Compose Rehearsal | **BLOCKED** | Docker not installed locally; compose up + healthcheck not executed |
+| **WP2:** GitHub Actions CI Verification | **PASS** | CI run: launch-check + docker-build both passed |
 | **WP3:** Staging Deployment | **BLOCKED** | Requires external staging infrastructure |
 | **WP4:** Post-Deploy Predeploy Check | **BLOCKED** | Depends on WP3 (staging) |
 | **WP5:** Real Report Smoke On Staging | **BLOCKED** | Depends on WP3 (staging) |
 | **WP6:** MongoDB Persistence Verification | **BLOCKED** | Depends on WP3 or Docker |
 | **WP7:** Observability And Operations | **BLOCKED** | Depends on WP3 (staging) |
-| **WP8:** Release Hygiene And Final Candidate | **PASS** | All local checks pass |
+| **WP8:** Release Hygiene And Final Candidate | **PASS** | git clean, launch check 10/10, manifest clean |
 
 **Not done:** No new features added. No unrelated refactoring performed.
 
@@ -28,105 +29,49 @@ This handoff covers all 8 work packages defined in [`docs/launch-remaining-work-
 
 ## Changes
 
-### Files Modified (26 tracked files)
+### Branch
+`chore/ci-verify-2026-06-06` — based on `origin/master` (68f70f7)
 
+### Commits (local branch, ahead of origin/master)
+```
+2fcd03f chore: update release manifest timestamp for commit 2b35867
+2b35867 chore: update release manifest to commit de4accb
+de4accb chore: add workflow files, components.json, agent handoff report; gitignore cleanup
+6b376b2 chore: launch-readiness final (without workflow files, no workflow scope) [pushed]
+```
+
+### Files Modified (tracked)
 | File | Change |
 |---|---|
-| `.gitignore` | Added exclusions for `.env`, `.agents`, `.claude`, `skills-lock.json` |
-| `README.md` | Updated to `DEPLOYABLE_CANDIDATE` status, env var docs |
-| `backend/.env.example` | Updated env template with all required vars |
-| `backend/config.json` | LLM provider configs, pipeline definitions |
-| `backend/pyproject.toml` | Package metadata, dependencies |
-| `backend/src/agents/analysis/llm_subprocess.py` | LLM subprocess fixes |
-| `backend/src/agents/assembly/section_writer_agent.py` | Section writer improvements |
-| `backend/src/agents/data/macro_agent.py` | Macro agent fixes |
-| `backend/src/agents/data/news_agent.py` | News agent fixes |
-| `backend/src/agents/data/price_agent.py` | Price agent fixes |
-| `backend/src/agents/data/tech_indicators_agent.py` | Tech indicators fixes |
-| `backend/src/agents/orchestrator.py` | Orchestrator routing improvements |
-| `backend/src/api/main.py` | FastAPI app entry, health/ready/metrics |
-| `backend/src/api/routes/config_routes.py` | LLM model config API |
-| `backend/src/api/routes/report.py` | Report routes with data quality |
-| `backend/src/api/routes/upload.py` | Upload security sanitization |
-| `backend/src/providers/qveris_provider.py` | QVeris provider fixes |
-| `backend/tests/unit/test_agent_orchestrator.py` | Orchestrator tests |
-| `frontend/README.md` | Updated dev instructions |
-| `frontend/app/globals.css` | Global styles |
-| `frontend/app/layout.tsx` | Root layout |
-| `frontend/app/page.tsx` | Home page |
-| `frontend/app/progress/page.tsx` | Progress/SSE page |
-| `frontend/app/report/page.tsx` | Report reader with data quality |
-| `frontend/app/reports/page.tsx` | Report list |
-| `frontend/app/settings/page.tsx` | LLM config settings |
-| `frontend/lib/api.ts` | API client |
-| `frontend/next.config.ts` | Security headers config |
-| `frontend/package-lock.json` | Dependency lock |
-| `frontend/package.json` | Dependencies |
-| `scripts/launch_check.py` | **Fixed:** added frontend dev server startup before Playwright e2e |
+| `.gitignore` | Added exclusions for `tradingagents-cn/`, `UsersAdmin*/`, `superpowers/`, `design-*.html`, `shot_homepage.png` |
+| `docs/release-manifest-latest.json` | Regenerated with `dirty=false`, commit `2b35867` |
 
-### Files Created (51 new files)
+### Files Created (new, in PR)
+| File | Description |
+|---|---|
+| `.github/workflows/ci.yml` | CI pipeline: launch-check + docker-build + manifest artifact upload |
+| `.github/workflows/deploy-verify.yml` | Manual trigger: predeploy check against deployed target |
+| `docs/agent-handoff-proma-agent-2026-06-06.md` | This report |
+| `frontend/components.json` | shadcn/ui configuration |
 
-**Docker & Deploy:**
-- `Dockerfile.backend`, `Dockerfile.frontend`, `docker-compose.prod.yml`
-- `.dockerignore`
-- `deploy/backend.env.example`, `deploy/compose.env.example`
+### Files Gitignored (excluded from PR)
+| File | Reason |
+|---|---|
+| `tradingagents-cn/` | Symlink to cloned external repo |
+| `UsersAdmin*/` | Cloned external repo directory |
+| `superpowers/` | Separate unrelated project (AI enhancement tools) |
+| `frontend/design-*.html` | Design exploration artifacts |
+| `frontend/shot_homepage.png` | Screenshot artifact |
 
-**CI/CD:**
-- `.github/workflows/ci.yml` (launch-check + docker-build jobs)
-- `.github/workflows/deploy-verify.yml` (manual target verification)
-
-**Scripts:**
-- `scripts/launch_check.py` (10-step launch readiness orchestrator)
-- `scripts/predeploy_check.py` (deployed target validator)
-- `scripts/release_manifest.py` (release manifest generator)
-- `scripts/repository_safety_check.py` (secret/value leak scanner)
-
-**Backend:**
-- `backend/src/api/db.py` (MongoDB connection via motor)
-- `backend/src/api/observability.py` (Prometheus metrics middleware)
-- `backend/src/api/security_headers.py` (X-Content-Type-Options, etc.)
-- `backend/src/agents/assembly/report_engine.py` (8-section value report parser)
-- Unit tests: `test_llm_subprocess.py`, `test_observability.py`, `test_production_readiness.py`, `test_qveris_provider.py`, `test_report_engine.py`, `test_report_route_helpers.py`, `test_security_headers.py`, `test_tech_indicators_agent.py`, `test_upload_security.py`
-
-**Frontend:**
-- `frontend/app/archive/page.tsx`, `frontend/app/portfolio/page.tsx`
-- `frontend/components/ui/*.tsx` (badge, button, card, dialog, input, select, separator, skeleton)
-- `frontend/e2e/trustworthy-report-smoke.spec.ts`, `frontend/e2e/screenshots.js`
-- `frontend/lib/utils.ts`
-
-**Docs:**
-- `docs/deployment-runbook-2026-06-05.md`
-- `docs/launch-readiness-2026-06-05.md`
-- `docs/launch-remaining-work-2026-06-06.md`
-- `docs/release-manifest-2026-06-05.json`
-- `docs/release-manifest-latest.json`
-- `docs/test-report-2026-06-04.md`
-- `docs/designs/2026-06-02-integration-plan.md`
-- `docs/superpowers/plans/2026-06-05-launch-readiness.md`
-
-**Tests:**
-- `tests/test_predeploy_check.py` (11 unit tests)
-
-**Other:**
-- `.dockerignore`, `AGENTS.md`
-
-### Files Deleted (8 files)
-
-- `clipboard-20260517-085007.md`, `clipboard-20260517-132244.md` (old clipboard dumps)
-- `start.ps1` (replaced by launch_check.py)
-- 5 Chinese-named `.md` doc files (legacy planning docs, superseded by docs/)
-
-### Files Intentionally Excluded (not committed)
-
-- `frontend/shot_homepage.png` (screenshot artifact)
-- `frontend/design-redesign.html`, `frontend/design-v3.html` (design exploration)
-- `tradingagents-cn/`, `UsersAdmin.*/` (cloned external repo directory)
-- `superpowers/` (separate unrelated project)
-- `frontend/components.json` (shadcn config artifact)
+### Files Deleted (previously committed, now removed)
+None. Deletions of clipboard dumps and legacy Chinese-named docs were in the prior commit.
 
 ---
 
 ## Verification
+
+### `git status --short`
+**Result:** Empty — working tree is clean.
 
 ### `python scripts/repository_safety_check.py`
 - **Result:** PASS
@@ -134,13 +79,21 @@ This handoff covers all 8 work packages defined in [`docs/launch-remaining-work-
 - No secret value patterns (`sk-...`, JWT tokens) found in git-tracked files
 
 ### `python scripts/predeploy_check.py --static --production-target`
+- **Command:**
+  ```
+  predeploy_check.py --static --production-target
+    --backend-url https://api.investment-report-agent.com
+    --frontend-url https://app.investment-report-agent.com
+    --api-url https://api.investment-report-agent.com/api/v1
+  ```
+- **Exit code:** 0
 - **Result:** PASS
 - Production URL shape validates correctly
-- Placeholder domains rejected
-- Localhost URLs rejected
+- Placeholder domains rejected; localhost URLs rejected
 - API URL must end with `/api/v1`
 
 ### `python scripts/launch_check.py`
+- **Exit code:** 0
 - **Result:** PASS (all 10 checks)
 
 | Check | Result | Duration |
@@ -156,7 +109,7 @@ This handoff covers all 8 work packages defined in [`docs/launch-remaining-work-
 | Frontend build | PASS (9 routes) | 6.9s |
 | Frontend smoke e2e (Playwright) | PASS (5/5) | 4.6s |
 
-**Note:** The Playwright e2e was failing because `launch_check.py` did not start the frontend dev server before running tests. Fixed by adding frontend startup (`npm run dev`) in the e2e phase.
+**Fix applied:** `launch_check.py` now starts the frontend dev server (`npm run dev`) before running Playwright e2e. Verified locally and in CI.
 
 ### Frontend Build Output
 ```
@@ -173,19 +126,25 @@ Route (app)
 ```
 9 static routes compiled successfully.
 
-### Frontend E2E (5 tests, all PASS)
+### Frontend E2E (5/5 passing)
 1. Home page exposes the core analysis entry ✓
-2. Demo report is explicitly labeled (Demo 数据) ✓
+2. Demo report is explicitly labeled (`Demo 数据`) ✓
 3. Invalid real task shows error instead of Demo fallback ✓
 4. Progress failure stays on real-report error state ✓
 5. Implemented secondary pages render ✓
 
-### Branch Status
-- **Branch:** `chore/ci-verify-2026-06-06`
-- **Remote:** Pushed to origin
-- **Workflow files:** Uploaded via API after granting `workflow` scope
-- **PR:** https://github.com/xk445138381/investment-report-agent/pull/1
-- **CI:** https://github.com/xk445138381/investment-report-agent/actions/runs/27061792192 (both jobs PASS)
+### GitHub Actions CI
+- **Run:** https://github.com/xk445138381/investment-report-agent/actions/runs/27061792192
+- **Conclusion:** success
+
+| Job | Steps | Duration |
+|---|---|---|
+| `launch-check` | 9/9 PASS (setup, checkout, Python/Node setup, pip install, npm ci, Playwright install, launch check, manifest upload) | ~2min |
+| `docker-build` | 5/5 PASS (setup, checkout, buildx setup, build backend image, build frontend image) | ~1.5min |
+
+**Docker images built:**
+- Backend: `Dockerfile.backend` (python:3.12-slim, non-root `app` user)
+- Frontend: `Dockerfile.frontend` (node:24-alpine, multi-stage, non-root `node` user, `NEXT_PUBLIC_API_URL` build arg)
 
 ---
 
@@ -193,19 +152,17 @@ Route (app)
 
 | Item | Location/Status |
 |---|---|
-| Release manifest | `docs/release-manifest-latest.json` |
+| Clean git status | Working tree clean, commit `2fcd03f` |
+| Release manifest | `docs/release-manifest-latest.json` (commit `2b35867`, dirty=false) |
 | Launch readiness report | `docs/launch-readiness-2026-06-05.md` |
 | Deployment runbook | `docs/deployment-runbook-2026-06-05.md` |
 | Test report | `docs/test-report-2026-06-04.md` |
-| Launch check output | See WP8 verification above |
-| Predeploy static check | See WP8 verification above |
-| Repository safety check | See WP8 verification above |
-| Frontend e2e results | 5/5 PASS (Playwright Chromium) |
 | Backend unit tests | 103/104 PASS (1 skipped: PDF renderer) |
 | Predeploy unit tests | 11/11 PASS |
+| Frontend e2e | 5/5 PASS (Playwright Chromium) |
 | CI run URL | https://github.com/xk445138381/investment-report-agent/actions/runs/27061792192 |
-| CI launch-check job | PASS (all 9 steps, incl. launch check + manifest upload) |
-| CI docker-build job | PASS (backend + frontend images built) |
+| CI launch-check job | PASS (all 9 steps) |
+| CI docker-build job | PASS (backend + frontend images) |
 | PR URL | https://github.com/xk445138381/investment-report-agent/pull/1 |
 | Deploy URL | N/A (no staging) |
 | Real report task IDs (dev) | `08d50fc2-4fc1-42d8-9096-172d1d0d16d2` (quick_scan), `e24e6592-b4de-4177-8516-ef2efeb730bc` (value_deep_dive) |
@@ -214,52 +171,65 @@ Route (app)
 
 ## Failures / Blockers
 
-### WP3-WP7: No Staging Infrastructure
-- All blocked on the same root cause: no external deployment environment
-- **Suggestion:** Deploy via Docker compose on a VPS, or use a platform (Railway, Fly.io, Render, etc.). The deployment runbook (`docs/deployment-runbook-2026-06-05.md`) documents the full procedure.
+### WP1: Docker Compose Rehearsal (BLOCKED)
+- **Failed item:** `docker compose up` with healthchecks
+- **Actual result:** Docker CLI not installed on this machine
+- **Expected result:** Compose starts backend, frontend, MongoDB; all healthchecks pass
+- **Mitigation:** CI `docker-build` job builds both images successfully. Compose config is syntactically verified by `launch_check.py`. Full rehearsal requires Docker runtime or a deployment target.
+
+### WP3-WP7: No Staging Infrastructure (BLOCKED)
+- All 5 work packages blocked on the same root cause: no external deployment environment
+- **Backend is ready:** FastAPI with `/health`, `/ready`, `/metrics`, security headers, CORS, production safeguards
+- **Frontend is ready:** Next.js 16, environment-driven API URL, shadcn/ui, 9 routes
+- **Deployment runbook:** `docs/deployment-runbook-2026-06-05.md` documents full procedure
+- **Suggestion:** Deploy via Docker compose on a VPS, or use a platform (Railway, Fly.io, Render, etc.)
+
+### Predeploy Check Network Mode (not run)
+- `predeploy_check.py` network mode requires a deployed target. Static mode validated PASS.
 
 ---
 
 ## Risk Notes
 
-1. **Docker build untested locally** — Dockerfiles and compose config are verified by CI `docker-build` job (backend + frontend images built successfully), but have never been run locally. Runtime issues (missing system deps, font rendering, etc.) remain low risk.
+1. **Docker compose rehearsal not done** — Compose healthchecks (backend->mongo, frontend->backend, mongo ping) have never been exercised. Low risk because CI builds both images and config is validated.
 
-2. **CI flow verified** — GitHub Actions CI ran successfully. Both `launch-check` and `docker-build` jobs passed. The PR at https://github.com/xk445138381/investment-report-agent/pull/1 shows passing status.
+2. **CI verified** — GitHub Actions CI passed both jobs. PR #1 shows green status. The `launch_check.py` fix (frontend server startup for e2e) was verified both locally and in CI.
 
-3. **Fix to `launch_check.py`** — Added frontend dev server startup before Playwright e2e. This is a surgical addition that has been verified both locally and in CI.
+3. **MongoDB persistence unverified** — `backend/src/api/db.py` uses motor for async MongoDB access. Unit tests pass, but actual CRUD against a real MongoDB instance has not been tested from this environment.
 
-4. **MongoDB persistence** — The backend's MongoDB integration (`backend/src/api/db.py`) has never been tested against a real MongoDB instance from this environment. Unit tests pass, but actual CRUD behavior is unverified.
+4. **External API key management** — DeepSeek and QVeris keys are in `backend/.env` (gitignored). Production deployment needs proper secret management.
 
-5. **External API keys** — DeepSeek and QVeris keys are in `backend/.env` but are local-only. Production deployment needs proper secret management.
-
-6. **Release manifest regenerated** — `docs/release-manifest-latest.json` now references commit `6b376b25` (dirty=true due to API-uploaded workflow files not in local commit).
-
-7. **Known limitations from launch-ready report** (still applicable):
+5. **Known limitations from launch-readiness report** (still applicable):
    - Chrome extension unavailable → Playwright Chromium is the browser evidence
    - No managed production secret store → `/ready` validates required env vars
-   - Hosted observability not wired → `/metrics` exposed, needs scraping setup
+   - Hosted observability not wired → `/metrics` exposed, needs scraping/dashboard setup
+
+6. **Release manifest** — Regenerated and clean (`docs/release-manifest-latest.json`, dirty=false, commit `2b35867`).
 
 ---
 
 ## Conclusion
 
-**PASS: Docker Build (WP1) — verified in CI**
+**PASS: Docker Build (WP1 partial)**
 - Backend and frontend Docker images built successfully in GitHub Actions `docker-build` job.
+
+**BLOCKED: Docker Compose Rehearsal (WP1 partial)**
+- Compose up + healthchecks not executed locally (no Docker CLI).
 
 **PASS: CI Verification (WP2)**
 - GitHub Actions CI run: **both jobs PASS**.
-  - `launch-check`: all 9 steps successful (backend tests, safeguards, config checks, predeploy tests, lint, build, Playwright e2e, manifest upload)
-  - `docker-build`: backend + frontend images built successfully
-- CI URL: https://github.com/xk445138381/investment-report-agent/actions/runs/27061792192
-- PR: https://github.com/xk445138381/investment-report-agent/pull/1
+- `launch-check`: all 9 steps (backend tests, safeguards, config, predeploy tests, lint, build, Playwright e2e, manifest upload)
+- `docker-build`: backend + frontend images built
 
 **PASS: Release Hygiene (WP8)**
-- All local checks pass: 103/104 backend tests, 11/11 predeploy tests, frontend build (9 routes), Playwright e2e (5/5), production safeguards, repository safety, static predeploy validation.
+- `git status --short`: empty (clean working tree)
+- `release-manifest-latest.json`: dirty=false
+- All local checks: launch_check 10/10, predeploy static PASS, repo safety PASS
+- Unwanted files gitignored: tradingagents-cn/, superpowers/, design artifacts
 
-**BLOCKED: Staging (WP3-WP7)**
-- Requires a deployment target with real HTTPS origins, managed MongoDB, and secrets.
-- Backend is ready (FastAPI with health/ready/metrics, CORS, security headers, production safeguards).
-- Frontend is ready (Next.js 16, environment-driven API URL, shadcn/ui).
-- Runbook available at `docs/deployment-runbook-2026-06-05.md`.
+**BLOCKED: Staging and Operations (WP3-WP7)**
+- All blocked by lack of deployment target; no code changes needed.
+- Full procedure documented in `docs/deployment-runbook-2026-06-05.md`.
 
-**Overall:** The codebase is at `DEPLOYABLE_CANDIDATE` quality. WP1, WP2, and WP8 are fully verified. Remaining items (WP3-WP7) require a deployment target and external infrastructure, not code changes.
+**Overall: PASS (3/4 actionable work packages)**
+`DEPLOYABLE_CANDIDATE` — WP1 (Docker build), WP2 (CI), WP8 (Release Hygiene) fully verified. WP1 (compose rehearsal) and WP3-WP7 require a Docker/deployment environment, not code changes.
