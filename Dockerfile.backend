@@ -1,0 +1,36 @@
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONUTF8=1
+ENV PYTHONPATH=/app/backend/src
+ENV INVESTMENT_REPORT_CONFIG=/app/backend/config.json
+ENV ENVIRONMENT=production
+
+WORKDIR /app/backend
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        fontconfig \
+        fonts-noto-cjk \
+        libgdk-pixbuf-2.0-0 \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/pyproject.toml ./
+COPY backend/src ./src
+COPY backend/config.json ./config.json
+
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -e .
+
+RUN groupadd --system app \
+    && useradd --system --gid app --create-home --home-dir /home/app app \
+    && mkdir -p /home/app/.investment_report_agent/uploads \
+    && chown -R app:app /home/app /app/backend
+
+USER app
+
+EXPOSE 8000
+
+CMD ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

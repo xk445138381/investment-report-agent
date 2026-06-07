@@ -1,41 +1,111 @@
 "use client";
 
-const MOCK_REPORTS = [
-  { id: "1", ticker: "600519.SH", name: "贵州茅台", type: "深度研报", date: "2026-05-17", verdict: "买入", upside: "+17.3%" },
-  { id: "2", ticker: "300750.SZ", name: "宁德时代", type: "深度研报", date: "2026-05-16", verdict: "买入", upside: "+22.1%" },
-  { id: "3", ticker: "000858.SZ", name: "五粮液", type: "快速简报", date: "2026-05-15", verdict: "持有", upside: "+4.5%" },
-];
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { Search, FileText } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { apiUrl } from "@/lib/api";
+
+type ReportItem = {
+  task_id: string;
+  ticker: string;
+  company_name: string;
+  report_type: string;
+  verdict: string;
+  upside_pct: number;
+  created_at: string | null;
+};
+
+const reportTypeLabel = (t: string) => {
+  const map: Record<string, string> = { value_deep_dive: "价值投资", quick_scan: "快速扫描", deep_dive: "深度研报" };
+  return map[t] || t;
+};
 
 export default function ReportsPage() {
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    fetch(apiUrl("/reports"))
+      .then(r => r.json())
+      .then(d => { setReports(d.reports || []); setTotal(d.total || 0); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = search
+    ? reports.filter(r => r.company_name?.includes(search) || r.ticker?.includes(search))
+    : reports;
+
   return (
-    <div className="max-w-[860px] mx-auto px-8 py-12">
-      <div className="font-serif text-[22px] font-bold text-ink-primary mb-1.5">报告列表</div>
-      <div className="text-[13px] text-ink-secondary mb-7">管理已生成的研究报告。数据仅保存在当前会话中。</div>
-
-      <div className="border border-border-light">
-        {/* Header */}
-        <div className="grid grid-cols-[2fr_1fr_1fr_1fr] px-4 py-2.5 bg-bg-surface text-[10px] font-mono text-ink-tertiary tracking-[0.06em] border-b border-border-light">
-          <div>标的</div><div>类型</div><div>日期</div><div>评级</div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1C2434]">报告列表</h1>
+          <p className="text-sm text-[#64748B] mt-1">共 {total} 份研究报告</p>
         </div>
-        {MOCK_REPORTS.map((r) => (
-          <div key={r.id} className="grid grid-cols-[2fr_1fr_1fr_1fr] px-4 py-3 text-[13px] border-b border-border-light cursor-pointer hover:bg-bg-surface transition-colors items-center">
-            <div>
-              <div className="font-medium text-ink-primary">{r.name}</div>
-              <div className="font-mono text-[11px] text-ink-tertiary">{r.ticker}</div>
-            </div>
-            <div className="text-ink-secondary">{r.type}</div>
-            <div className="font-mono text-[11px] text-ink-tertiary">{r.date}</div>
-            <div className="flex items-center gap-2">
-              <span className={r.verdict === "买入" ? "text-accent font-medium" : "text-ink-secondary"}>{r.verdict}</span>
-              <span className={`font-mono text-[10px] ${r.upside.startsWith("+") ? "text-data-positive" : "text-ink-tertiary"}`}>{r.upside}</span>
-            </div>
-          </div>
-        ))}
+        <Link href="/" className="text-sm text-[#3B82F6] hover:underline">新建分析 →</Link>
       </div>
 
-      <div className="text-center py-10 text-xs text-ink-tertiary">
-        数据仅保存在当前会话 · 刷新后清空 · <code className="font-mono text-[11px]">GET /reports</code> 端点待后端实现
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
+        <Input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="搜索股票或代码…"
+          className="pl-10 border-[#E2E8F0]"
+        />
       </div>
+
+      {loading && <div className="text-center py-10 text-sm text-[#94A3B8]">加载中…</div>}
+
+      {!loading && filtered.length === 0 && (
+        <Card className="border-[#E2E8F0]">
+          <CardContent className="p-10 text-center">
+            <FileText className="w-10 h-10 text-[#94A3B8] mx-auto mb-3" />
+            <p className="text-sm text-[#64748B]">{search ? "未找到匹配报告" : "暂无报告，去首页开始分析吧"}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <Card className="border-[#E2E8F0] shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
+                  <th className="text-left text-xs font-semibold text-[#64748B] px-5 py-3">标的</th>
+                  <th className="text-left text-xs font-semibold text-[#64748B] px-5 py-3">类型</th>
+                  <th className="text-left text-xs font-semibold text-[#64748B] px-5 py-3">评级</th>
+                  <th className="text-right text-xs font-semibold text-[#64748B] px-5 py-3">上行空间</th>
+                  <th className="text-right text-xs font-semibold text-[#64748B] px-5 py-3">日期</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(r => (
+                  <tr key={r.task_id} className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC] transition-colors cursor-pointer" onClick={() => window.location.href = `/report?task=${r.task_id}`}>
+                    <td className="px-5 py-3.5">
+                      <div className="text-sm font-medium text-[#1C2434]">{r.company_name}</div>
+                      <div className="text-xs text-[#94A3B8] font-mono">{r.ticker}</div>
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-[#64748B]">{reportTypeLabel(r.report_type)}</td>
+                    <td className="px-5 py-3.5">
+                      <Badge variant={r.verdict === "Yes" ? "positive" : "secondary"} className={`text-[11px] ${r.verdict === "Yes" ? "bg-[#F0FDF4] text-[#22C55E]" : r.verdict === "No" ? "bg-[#FEF2F2] text-[#EF4444]" : "bg-[#F8FAFC] text-[#64748B]"}`}>{r.verdict}</Badge>
+                    </td>
+                    <td className="px-5 py-3.5 text-right text-sm font-mono text-[#22C55E]">{r.upside_pct ? `+${Number(r.upside_pct).toFixed(1)}%` : "—"}</td>
+                    <td className="px-5 py-3.5 text-right text-xs text-[#94A3B8]">{r.created_at ? new Date(r.created_at).toLocaleDateString("zh-CN") : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

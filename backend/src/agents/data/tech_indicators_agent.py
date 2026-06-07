@@ -34,11 +34,12 @@ async def run_tech_indicators(ticker, company_name, prices=None):
         else:
             trend = "偏空"
 
-        # RSI (14)
-        gains = [max(closes[i] - closes[i-1], 0) for i in range(1, min(15, len(closes)))]
-        losses = [max(closes[i-1] - closes[i], 0) for i in range(1, min(15, len(closes)))]
-        avg_gain = sum(gains[-14:]) / min(14, len(gains))
-        avg_loss = sum(losses[-14:]) / min(14, len(losses))
+        # RSI (14) uses the most recent window; older rows must not skew quick-scan signals.
+        rsi_window = closes[-15:]
+        gains = [max(rsi_window[i] - rsi_window[i-1], 0) for i in range(1, len(rsi_window))]
+        losses = [max(rsi_window[i-1] - rsi_window[i], 0) for i in range(1, len(rsi_window))]
+        avg_gain = sum(gains) / 14
+        avg_loss = sum(losses) / 14
         rsi = 100 - (100 / (1 + avg_gain / avg_loss)) if avg_loss > 0 else 100
 
         # MACD

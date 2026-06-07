@@ -1,115 +1,87 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  /* ── 和纸底色 ── */
-  --color-bg-warm: #FAF8F5;
-  --color-bg-surface: #F3F0EC;
-  --color-bg-elevated: #FFFFFF;
+  /* ── shadcn/ui color tokens ── */
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.141 0.005 285.823);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.141 0.005 285.823);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.141 0.005 285.823);
+  --color-primary: oklch(0.546 0.245 262.881);
+  --color-primary-foreground: oklch(1 0 0);
+  --color-secondary: oklch(0.967 0.001 286.375);
+  --color-secondary-foreground: oklch(0.21 0.006 285.885);
+  --color-muted: oklch(0.967 0.001 286.375);
+  --color-muted-foreground: oklch(0.552 0.016 285.938);
+  --color-accent: oklch(0.967 0.001 286.375);
+  --color-accent-foreground: oklch(0.21 0.006 285.885);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(1 0 0);
+  --color-border: oklch(0.92 0.004 286.32);
+  --color-input: oklch(0.92 0.004 286.32);
+  --color-ring: oklch(0.546 0.245 262.881);
+  --color-sidebar: oklch(0.985 0.002 247.839);
+  --color-sidebar-foreground: oklch(0.141 0.005 285.823);
+  --color-sidebar-primary: oklch(0.21 0.006 285.885);
+  --color-sidebar-primary-foreground: oklch(0.985 0.002 247.839);
+  --color-sidebar-accent: oklch(0.967 0.001 286.375);
+  --color-sidebar-accent-foreground: oklch(0.21 0.006 285.885);
+  --color-sidebar-border: oklch(0.92 0.004 286.32);
+  --color-sidebar-ring: oklch(0.871 0.006 286.286);
+  --color-chart-1: oklch(0.546 0.245 262.881);
+  --color-chart-2: oklch(0.627 0.194 149.214);
+  --color-chart-3: oklch(0.707 0.165 56.55);
+  --color-chart-4: oklch(0.545 0.122 323.58);
+  --color-chart-5: oklch(0.6 0.18 20);
 
-  /* ── 墨色文字 ── */
-  --color-ink-primary: #2D2420;
-  --color-ink-secondary: #6B5E58;
-  --color-ink-tertiary: #9E9288;
+  /* ── Finance-specific tokens ── */
+  --color-positive: #34c759;
+  --color-positive-soft: rgba(52, 199, 89, 0.1);
+  --color-negative: #ff3b30;
+  --color-negative-soft: rgba(255, 59, 48, 0.1);
 
-  /* ── 朱砂强调 ── */
-  --color-accent: #C04A1A;
-  --color-accent-hover: #A03D12;
-  --color-accent-soft: #F5E6DD;
+  --radius-sm: calc(0.5rem - 2px);
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 
-  /* ── 数据色板 ── */
-  --color-data-positive: #3D6B4F;
-  --color-data-negative: #C04A1A;
-  --color-data-neutral: #9E9288;
-  --color-data-series-1: #2D2420;
-  --color-data-series-2: #C04A1A;
-  --color-data-series-3: #6B5E58;
-  --color-data-series-4: #D4C5B9;
-  --color-data-series-5: #3D6B4F;
+  --font-sans: "Inter", "Noto Sans SC", "PingFang SC", ui-sans-serif, sans-serif;
+  --font-serif: "Playfair Display", "Noto Serif SC", ui-serif, serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
 
-  /* ── 边框分割 ── */
-  --color-border-light: #E8E2DB;
-  --color-border: #D4C5B9;
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
 
-  /* ── 字体系统 ── */
-  --font-serif: "Noto Serif SC", "Source Han Serif SC", ui-serif, Georgia, serif;
-  --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, monospace;
-  --font-display: "Playfair Display", "Noto Serif SC", ui-serif, serif;
-
-  /* ── 间距 8pt 网格 (作为 Tailwind 扩展) ── */
-  --spacing-section: 2rem;
-  --spacing-block: 3rem;
-  --spacing-page: 6rem;
+  @keyframes accordion-down {
+    from { height: 0; }
+    to { height: var(--radix-accordion-content-height); }
+  }
+  @keyframes accordion-up {
+    from { height: var(--radix-accordion-content-height); }
+    to { height: 0; }
+  }
 }
 
-/* ── 基础样式 ── */
+/* ── Base styles ── */
 body {
-  background: var(--color-bg-warm);
-  color: var(--color-ink-primary);
+  background: var(--color-background);
+  color: var(--color-foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── 排版 ── */
-h1, h2, h3, h4 {
-  font-family: var(--font-serif);
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: 0.02em;
+* {
+  border-color: var(--color-border);
 }
 
-h1 { font-size: 1.75rem; }   /* 28px */
-h2 { font-size: 1.375rem; }  /* 22px */
-h3 { font-size: 1.125rem; }  /* 18px */
-
-p {
-  line-height: 1.8;
-  font-size: 1rem;           /* 16px */
-}
-
-/* ── 数据大字报 ── */
-.data-headline {
-  font-family: var(--font-display);
-  font-size: 2.25rem;        /* 36px */
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: 0.04em;
-}
-
-/* ── Ticker/代码块 ── */
-.ticker, code, pre {
-  font-family: var(--font-mono);
-}
-
-/* ── 分割线 ── */
-hr {
-  border: none;
-  border-top: 1px solid var(--color-border-light);
-  margin: var(--spacing-section) 0;
-}
-
-/* ── 链接 ── */
-a {
-  color: var(--color-accent);
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-a:hover { color: var(--color-accent-hover); }
-
-/* ── 选中样式 ── */
-::selection {
-  background: var(--color-accent-soft);
-  color: var(--color-ink-primary);
-}
-
-/* ── 动画 ── */
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.25; }
+/* ── Print styles ── */
+@media print {
+  @page { margin: 2cm 1.8cm; size: A4; }
+  aside, .print\:hidden { display: none !important; }
+  img { max-width: 100%; page-break-inside: avoid; }
 }

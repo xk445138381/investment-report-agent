@@ -26,7 +26,9 @@ async def run_news_agent(ticker, company_name, prices=None):
                 })
             result["recent_events"] = events
             result["note"] = f"财达子研报: {len(events)} 篇"
+            result["data_quality"] = {"source": "Caidazi", "items_found": len(events), "quality": "high" if len(events) >= 5 else "medium" if len(events) >= 1 else "low"}
     except Exception as e:
         logger.info(f"News via QVeris not available: {e}")
         result["note"] = "新闻源待接入（Phase 2）"
+        result["data_quality"] = {"source": "none", "items_found": 0, "quality": "low"}
     return result

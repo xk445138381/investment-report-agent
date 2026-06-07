@@ -1,37 +1,36 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { generateReport, streamProgress } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-const INITIAL_PHASES = [
-  { id: "p1", num: "01", name: "数据聚合", agents: ["行情数据","财报数据","公告新闻","宏观行业"] },
-  { id: "p2", num: "02", name: "深度分析", agents: ["财务分析","估值建模","行业竞争","公司治理"] },
-  { id: "p3", num: "03", name: "多空辩论", agents: ["多头论点","空头论点","风险裁判"] },
-  { id: "p4", num: "04", name: "统稿排版", agents: ["章节撰写","图表生成","标题摘要"] },
-];
-
-const SCAN_PHASES = [
-  { id: "s1", num: "01", name: "数据聚合", agents: ["行情","财报","技术指标","资金流向","新闻"] },
-  { id: "s2", num: "02", name: "LLM 总结", agents: ["一句话买卖建议"] },
-];
-
-const VALUE_PHASES = [
-  { id: "v1", num: "01", name: "数据聚合", agents: ["行情数据","财报数据","公告新闻","宏观行业"] },
-  { id: "v2", num: "02", name: "财务分析", agents: ["财务分析","估值建模","行业竞争","公司治理"] },
-  { id: "v3", num: "03", name: "价值评估", agents: ["段永平视角","芒格视角"] },
-  { id: "v3b", num: "03b", name: "综合裁决", agents: ["双视角裁决官"] },
-  { id: "v4", num: "04", name: "统稿排版", agents: ["章节撰写","图表生成","标题摘要"] },
-];
-
-const DEBATE = {
-  bull: ["超高 ROE (28.5%) 和宽阔护城河支撑估值溢价","直销占比提升将直接推升净利率 5.2%","消费升级趋势下高端白酒需求刚性"],
-  bear: ["宏观经济放缓抑制商务消费场景","行业监管趋严，消费税改革风险上升","当前 PE 处于近 5 年 72% 分位"],
+const PHASES: Record<string, { num: string; name: string; agents: string[] }[]> = {
+  scan: [
+    { num: "01", name: "数据聚合", agents: ["行情", "财报", "技术指标", "资金流向", "新闻"] },
+    { num: "02", name: "LLM 总结", agents: ["一句话买卖建议"] },
+  ],
+  value: [
+    { num: "01", name: "数据聚合", agents: ["行情数据", "财报数据", "公告新闻", "宏观行业"] },
+    { num: "02", name: "财务分析", agents: ["财务分析", "估值建模", "行业竞争", "公司治理"] },
+    { num: "03", name: "价值评估", agents: ["段永平视角", "芒格视角"] },
+    { num: "03b", name: "综合裁决", agents: ["双视角裁决官"] },
+    { num: "04", name: "统稿排版", agents: ["章节撰写", "图表生成", "标题摘要"] },
+  ],
+  deep: [
+    { num: "01", name: "数据聚合", agents: ["行情数据", "财报数据", "公告新闻", "宏观行业"] },
+    { num: "02", name: "深度分析", agents: ["财务分析", "估值建模", "行业竞争", "公司治理"] },
+    { num: "03", name: "多空辩论", agents: ["多头论点", "空头论点", "风险裁判"] },
+    { num: "04", name: "统稿排版", agents: ["章节撰写", "图表生成", "标题摘要"] },
+  ],
 };
 
-const VALUE_DEBATE = {
-  duan: ["商业模式清晰度：这个生意怎么赚钱？十年后还能赚钱吗？","企业文化与本分：管理层在做对的事吗？","现金流确定性：利润里有几分真金白银？"],
-  munger: ["反过来想：这笔投资最可能怎么死？","Lollapalooza 检测：多种风险因子同时发力的场景","激励机制诊断：管理层与股东利益对齐吗？"],
+const REPORT_TYPE_BY_DEPTH: Record<string, string> = {
+  scan: "quick_scan",
+  value: "value_deep_dive",
+  deep: "deep_dive",
+  brief: "brief",
 };
 
 function ProgressContent() {
@@ -40,159 +39,117 @@ function ProgressContent() {
   const ticker = params.get("ticker") || "贵州茅台";
   const depth = params.get("depth") || "deep";
   const template = params.get("template") || "deep_dive_default";
-  const isValue = template === "value_investor";
-  const isScan = template === "quick_scan";
-  const phases = isScan ? SCAN_PHASES : isValue ? VALUE_PHASES : INITIAL_PHASES;
+  const phases = PHASES[depth] || PHASES.deep;
 
   const [phase, setPhase] = useState(0);
   const [logs, setLogs] = useState<string[]>([`▶ 开始分析 ${ticker}…`]);
-  const [showDebate, setShowDebate] = useState(false);
-  const [mode, setMode] = useState<"connecting" | "real" | "mock">("connecting");
+  const [agentStatus, setAgentStatus] = useState<Record<string, string>>({});
+  const [mode, setMode] = useState<"connecting" | "real" | "error">("connecting");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const started = useRef(false);
 
-  const goReport = (tid?: string) => {
-    const params = new URLSearchParams({ ticker });
-    if (tid) params.set("task", tid);
-    router.push(`/report?${params.toString()}`);
-  };
+  const goReport = useCallback((tid?: string) => {
+    const p = new URLSearchParams({ ticker });
+    if (tid) p.set("task", tid);
+    router.push(`/report?${p.toString()}`);
+  }, [router, ticker]);
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-
     (async () => {
-      // Try real backend first
       try {
-        const res = await generateReport({ ticker, report_type: depth as "deep_dive" | "brief", template_id: template });
-        setLogs((prev) => [...prev, `✓ 分析任务启动: ${res.task_id.slice(0, 8)}…`]);
+        const reportType = REPORT_TYPE_BY_DEPTH[depth] || "deep_dive";
+        const res = await generateReport({ ticker, report_type: reportType, template_id: template });
+        setLogs(prev => [...prev, `✓ 任务启动: ${res.task_id.slice(0, 8)}…`]);
         setMode("real");
-
-        const abort = streamProgress(res.task_id, (event, data) => {
+        streamProgress(res.task_id, (event, data) => {
           if (event === "progress") {
-            setLogs((prev) => [...prev, `⏳ ${data}`]);
-            if (data.includes("phase_2")) setPhase(2);
-            else if (data.includes("phase_3")) { setPhase(3); setShowDebate(true); }
-            else if (data.includes("phase_4")) setPhase(4);
-            else if (data.includes("phase_1")) setPhase(1);
+            setLogs(prev => [...prev, `⏳ ${data}`]);
+            if (data.includes("phase_2")) setPhase(2); else if (data.includes("phase_3")) setPhase(3); else if (data.includes("phase_4")) setPhase(4); else if (data.includes("phase_1")) setPhase(1);
+          } else if (event === "agent_completed") {
+            try { const p = JSON.parse(data); if (p.agent) setAgentStatus(prev => ({ ...prev, [p.agent]: p.status })); } catch {}
           } else if (event === "complete") {
-            setPhase(4);
-            setLogs((prev) => [...prev, "✓ 报告生成完成"]);
-            setTimeout(() => goReport(res.task_id), 800);
+            setLogs(prev => [...prev, "✓ 报告生成完成"]); setTimeout(() => goReport(res.task_id), 800);
           } else if (event === "error") {
-            setLogs((prev) => [...prev, `✗ ${data}`]);
+            setMode("error");
+            setErrorMessage(data || "报告生成失败");
+            setLogs(prev => [...prev, `✗ ${data || "报告生成失败"}`]);
           }
         });
-        return () => abort();
-      } catch {
-        // Fall back to mock
-        setLogs((prev) => [...prev, "后端未连接，使用 Demo 模式"]);
-        setMode("mock");
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "后端未连接，真实报告未生成";
+        setMode("error");
+        setErrorMessage(message);
+        setLogs(prev => [...prev, `✗ ${message}`]);
       }
     })();
-  }, []);
-
-  // Mock progress (only when API fails)
-  useEffect(() => {
-    if (mode !== "mock") return;
-    setLogs((prev) => [...prev, `▶ Demo: ${ticker} (600519.SH) — ${depth === "deep" ? "深度研报" : "快速简报"}`]);
-    const schedule = [{ p: 1, d: 600 }, { p: 2, d: 1300 }, { p: 3, d: 2100 }, { p: 4, d: 3000 }];
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    schedule.forEach((s) => {
-      timers.push(setTimeout(() => {
-        setPhase(s.p);
-        if (s.p === 3) setShowDebate(true);
-        if (s.p === 4) setTimeout(() => goReport(), 500);
-      }, s.d));
-    });
-    return () => timers.forEach(clearTimeout);
-  }, [mode]);
+  }, [depth, goReport, template, ticker]);
 
   return (
-    <div className="max-w-[780px] mx-auto px-8 py-12">
-      <div className="text-center mb-8">
-        <div className="font-display text-[36px] font-bold text-ink-primary leading-tight">{ticker}</div>
-        <div className="font-mono text-xs text-ink-tertiary mt-1">
-          600519.SH · {depth === "deep" ? "深度研报" : "快速简报"}
-          <span className={`ml-2 ${mode === "real" ? "text-data-positive" : mode === "mock" ? "text-ink-tertiary" : "text-accent"}`}>
-            {mode === "connecting" ? "连接中…" : mode === "real" ? "实时" : "Demo"}
-          </span>
-        </div>
-      </div>
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div><h1 className="text-2xl font-bold text-[#1C2434]">正在分析 {ticker}</h1><p className="text-sm text-[#64748B] mt-1">多 Agent 协作生成报告中</p></div>
 
-      {/* Progress bar */}
-      <div className="mb-7">
-        <div className="h-0.5 bg-border-light">
-          <div className="h-full bg-accent transition-[width] duration-[0.6s]" style={{ width: `${phase * 25}%` }} />
-        </div>
-        <div className="flex justify-between text-[11px] text-ink-tertiary font-mono mt-1.5">
-          <span>Phase {phase} / 4</span><span>{phase * 25}%</span>
-        </div>
-      </div>
-
-      {/* Phase cards */}
-      <div className={`grid gap-2.5 mb-7 ${isScan ? 'grid-cols-2' : isValue ? 'grid-cols-5' : 'grid-cols-4'}`}>
-        {phases.map((p, i) => (
-          <div key={p.id} className={`p-3.5 relative ${
-            i < phase ? "bg-bg-surface border border-data-positive" :
-            i === phase ? "bg-accent-soft border border-accent" :
-            "bg-bg-surface border border-border-light opacity-40"
-          }`}>
-            <div className="font-display text-2xl font-bold text-ink-primary opacity-10 absolute top-1 right-2">{p.num}</div>
-            <div className="font-serif text-[13px] font-semibold text-ink-primary mb-1.5">{p.name}</div>
-            {p.agents.map((a, j) => {
-              const state = i < phase ? "done" : i === phase && j === 0 ? "running" : "pending";
-              return (
-                <div key={a} className="text-[10px] text-ink-secondary mb-0.5 flex items-center gap-1.5">
-                  <span className={`inline-block w-[5px] h-[5px] ${
-                    state === "running" ? "bg-accent animate-[pulse_1.2s_infinite]" :
-                    state === "done" ? "bg-data-positive" : "bg-border"
-                  }`} />{a}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-      {/* Debate / Value Perspectives */}
-      {showDebate && (
-        <div className="grid grid-cols-2 gap-2.5 mb-7 animate-[slideIn_0.3s_ease]">
-          <div className="p-3.5 bg-bg-surface border border-border-light">
-            <div className="text-[10px] font-mono text-data-positive tracking-[0.06em] mb-2">
-              {isValue ? "段永平视角" : "BULL CASE"}
+      {mode === "error" && (
+        <Card className="border-[#FCA5A5] bg-[#FEF2F2]">
+          <CardContent className="p-4">
+            <div className="text-sm font-semibold text-[#991B1B]">真实报告未生成</div>
+            <div className="text-xs text-[#B91C1C] mt-1">
+              {errorMessage || "后端连接失败。系统已停止，不会静默展示 Demo 报告。"}
             </div>
-            {(isValue ? VALUE_DEBATE.duan : DEBATE.bull).map((t, i) => (
-              <div key={i} className="text-xs text-ink-secondary mb-1.5 leading-relaxed">· {t}</div>
-            ))}
-          </div>
-          <div className="p-3.5 bg-bg-surface border border-border-light">
-            <div className="text-[10px] font-mono text-accent tracking-[0.06em] mb-2">
-              {isValue ? "芒格视角" : "BEAR CASE"}
-            </div>
-            {(isValue ? VALUE_DEBATE.munger : DEBATE.bear).map((t, i) => (
-              <div key={i} className="text-xs text-ink-secondary mb-1.5 leading-relaxed">· {t}</div>
-            ))}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Logs */}
-      <div className="p-3.5 bg-bg-surface border border-border-light max-h-[180px] overflow-y-auto font-mono text-[11px] leading-[2]">
-        {logs.map((l, i) => (
-          <div key={i} className={l.startsWith("✓") ? "text-ink-secondary" : l.startsWith("✗") ? "text-accent" : l.startsWith("⏳") ? "text-ink-tertiary" : "text-accent"}>
-            <span className="text-ink-tertiary mr-2.5">{new Date().toLocaleTimeString("zh-CN", { hour12: false })}</span>
-            {l}
+      {/* Phase Progress */}
+      <Card className="border-[#E2E8F0]">
+        <CardContent className="p-5">
+          <div className="flex gap-2 mb-4">
+            {phases.map((p, i) => (
+              <div key={p.num} className="flex-1 h-1.5 rounded-full" style={{ background: i <= phase ? "#3B82F6" : "#E2E8F0" }} />
+            ))}
           </div>
-        ))}
-      </div>
+          <div className="grid grid-cols-5 gap-2">
+            {phases.map((p, i) => (
+              <div key={p.num} className={`p-2 rounded-lg text-center ${i === phase ? "bg-[#EFF6FF] border border-[#BFDBFE]" : i < phase ? "bg-[#F0FDF4]" : "bg-[#F8FAFC]"}`}>
+                <div className="text-[10px] text-[#64748B] font-mono mb-0.5">{p.num}</div>
+                <div className="text-xs font-medium text-[#1C2434]">{p.name}</div>
+                {p.agents.map(a => (
+                  <div key={a} className="text-[9px] text-[#94A3B8] mt-0.5 flex items-center gap-1 justify-center">
+                    <span className={`w-1.5 h-1.5 rounded-full ${i < phase ? "bg-[#22C55E]" : i === phase ? "bg-[#3B82F6] animate-pulse" : "bg-[#E2E8F0]"}`} />
+                    {a}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Agent Status */}
+      {Object.keys(agentStatus).length > 0 && (
+        <Card className="border-[#E2E8F0]">
+          <CardContent className="p-4">
+            <h3 className="text-xs font-semibold text-[#64748B] mb-2">AGENT 完成状态</h3>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(agentStatus).map(([name, status]) => (
+                <Badge key={name} variant={status === "done" ? "positive" : "secondary"} className={`text-[10px] ${status === "done" ? "bg-[#F0FDF4] text-[#22C55E]" : "bg-[#F8FAFC] text-[#64748B]"}`}>{name}: {status === "done" ? "✓" : status}</Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Log */}
+      <Card className="border-[#E2E8F0]">
+        <CardContent className="p-4 max-h-40 overflow-y-auto">
+          {logs.map((l, i) => <div key={i} className="text-xs text-[#64748B] py-0.5 font-mono">{l}</div>)}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
 export default function ProgressPage() {
-  return (
-    <Suspense fallback={<div className="max-w-[780px] mx-auto px-8 py-12 text-center text-ink-tertiary">加载分析管线…</div>}>
-      <ProgressContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<div className="text-center py-12 text-[#94A3B8]">加载中…</div>}><ProgressContent /></Suspense>;
 }

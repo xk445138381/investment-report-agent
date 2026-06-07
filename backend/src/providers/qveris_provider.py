@@ -37,6 +37,20 @@ def _market(ticker: str) -> str:
     if ".HK" in ticker.upper() or ticker.startswith("0"): return "HK"
     return "US"
 
+
+def _cn_financial_code(ticker: str) -> str | None:
+    mapped = TICKER_MAP.get(ticker)
+    if mapped:
+        return mapped
+    upper = ticker.upper()
+    if "." in upper:
+        code, suffix = upper.split(".", 1)
+        if len(code) == 6 and code.isdigit() and suffix in {"SH", "SZ"}:
+            return f"{code}.{suffix}"
+    if len(upper) == 6 and upper.isdigit():
+        return upper + (".SH" if upper.startswith("6") else ".SZ")
+    return None
+
 # Ticker → standardized code
 TICKER_MAP = {
     "600519.SH": "600519.SH", "600519": "600519.SH",
@@ -247,9 +261,8 @@ class QverisProvider(DataProvider):
             return await self._fetch_hk_financials(ticker, years)
         if market != "CN":
             return await self._fetch_us_financials(ticker)
-        mapping = TICKER_MAP.get(ticker)
-        if not mapping: return []
-        code = mapping
+        code = _cn_financial_code(ticker)
+        if not code: return []
         _PERIOD_MAP = {"0331": (3, 31), "0630": (6, 30), "0930": (9, 30), "1231": (12, 31)}
         current_year = date.today().year
 

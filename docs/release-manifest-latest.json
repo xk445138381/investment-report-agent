@@ -1,0 +1,58 @@
+{
+  "version": "deployable-candidate",
+  "created_at": "2026-06-06T12:59:32.820291+00:00",
+  "git": {
+    "commit": "a18461a5e2373d84c75400c97799816b0e0b03c6",
+    "branch": "chore/ci-verify-2026-06-06",
+    "dirty": false
+  },
+  "artifacts": {
+    "backend_image": "Dockerfile.backend",
+    "frontend_image": "Dockerfile.frontend",
+    "compose_file": "docker-compose.prod.yml",
+    "ci_workflow": ".github/workflows/ci.yml",
+    "deploy_verify_workflow": ".github/workflows/deploy-verify.yml",
+    "compose_env_template": "deploy/compose.env.example",
+    "backend_env_template": "deploy/backend.env.example"
+  },
+  "required_checks": [
+    "python scripts/launch_check.py",
+    "python -m pytest tests/ -v",
+    "GitHub Actions launch-check",
+    "GitHub Actions docker-build",
+    "GitHub Actions Deploy Verify"
+  ],
+  "launch_check_coverage": [
+    "backend unit tests",
+    "backend production safeguards",
+    "deployment config checks",
+    "predeploy unit tests",
+    "predeploy static checks",
+    "release manifest generation",
+    "repository safety check",
+    "frontend lint",
+    "frontend production build",
+    "frontend smoke e2e"
+  ],
+  "runtime_endpoints": {
+    "backend_health": "https://api.investment-report-agent.com/health",
+    "backend_ready": "https://api.investment-report-agent.com/ready",
+    "backend_metrics": "https://api.investment-report-agent.com/metrics",
+    "frontend": "https://app.investment-report-agent.com"
+  },
+  "post_deploy_assertions": [
+    "backend /health returns status=ok",
+    "production predeploy check requires api-url ending with /api/v1",
+    "production backend-url and frontend-url are origins without path, query, or fragment",
+    "production backend-url and frontend-url reject example placeholder domains",
+    "backend /ready returns status=ok",
+    "backend /ready reports checks.mongodb_required=true",
+    "backend /metrics exposes investment_report_http_requests_total",
+    "backend /health includes required security headers",
+    "backend CORS preflight allows the frontend origin to call /api/v1/report/generate",
+    "frontend includes required security headers",
+    "frontend renders the application shell"
+  ],
+  "post_deploy_check": "python scripts/predeploy_check.py --production-target --backend-url <backend-origin> --frontend-url <frontend-origin> --api-url <backend-origin>/api/v1",
+  "rollback_reference": "docs/deployment-runbook-2026-06-05.md#rollback"
+}

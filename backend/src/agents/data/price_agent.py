@@ -55,13 +55,27 @@ async def run_price_agent(
         "rsi_14": _calc_rsi(closes),
     }
 
+    trading_days = min(len(prices), 252)
+    gaps = 0
+    if len(prices) >= 2:
+        from datetime import timedelta
+        for i in range(1, min(len(prices), 252)):
+            if (prices[i].date - prices[i-1].date).days > 5:
+                gaps += 1
+    data_quality = {
+        "data_points": len(prices),
+        "trading_days_1y": trading_days,
+        "coverage_pct": round(trading_days / 252 * 100) if trading_days > 0 else 0,
+        "data_gaps": gaps,
+        "quality": "high" if trading_days >= 200 and gaps <= 2 else "medium" if trading_days >= 100 else "low",
+    }
     return {
         "ticker": ticker,
         "company_name": company_name,
+        "data_quality": data_quality,
         "market": "A股" if ".SH" in ticker or ".SZ" in ticker else "未知",
         "price_summary": price_summary,
         "technical_signals": technical,
-        "data_points": len(prices),
     }
 
 
