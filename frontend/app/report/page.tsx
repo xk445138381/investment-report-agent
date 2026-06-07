@@ -36,19 +36,19 @@ const MOCK: ReportData = {
   val: { weighted_value: 2440, weighted_upside_pct: 83.1, signal: "undervalued" },
   verdict: "STRONG_BUY", verdict_conf: 85, current_price: 1332.95, isValueTemplate: false,
   sections: {
-    executive_summary: { title: "投资摘要", content: "贵州茅台（600519.SH）当前 1332.95 元。判定：Yes（可买）。估计内在价值 2440 元，上行空间 83.1%。" },
-    business_model: { title: "商业模式", content: "高 ROE（24.3%）表明公司具备可持续竞争优势。毛利率 68.4%，产品或服务有定价权。" },
-    financial_health: { title: "财务健康与现金流", content: "财务综合评分 30.2/32 — EXCELLENT\nROE 24.3% | FCF/净利 0.92 | 负债权益比 0.15" },
-    valuation: { title: "估值与安全边际", content: "内在价值 2440 元/股（当前 1332.95，+83.1%）。安全边际 45%。低于 1708 开始买入。" },
-    inversion_checklist: { title: "逆向风险清单", content: "初步排查未发现明显致命风险。" },
-    dual_verdict: { title: "双重视角裁决", content: "段永平：好生意+好价格。芒格：同意。共识：商业模式清晰。Yes。" },
-    final_judgment: { title: "综合判定", content: "贵州茅台 — Yes（置信度 85%）。买价参考：低于 1708 开始买入。" },
+    executive_summary: { title: "投资摘要", content: "Demo 演示 — 仅供界面参考，非真实分析结果。请输入真实任务查看实际报告。" },
+    business_model: { title: "商业模式", content: "Demo 演示 — 此处展示商业模式分析框架（护城河、定价权、竞争格局）。实际报告由 AI 多 Agent 协同生成。" },
+    financial_health: { title: "财务健康与现金流", content: "Demo 演示 — 此处展示 ROE、FCF/净利润、负债权益比等财务指标。实际数据从 TradingAgents/QVeris 实时获取。" },
+    valuation: { title: "估值与安全边际", content: "Demo 演示 — 此处展示 DCF 三阶段模型 + Owner Earnings 估值结果及安全边际计算。" },
+    inversion_checklist: { title: "逆向风险清单", content: "Demo 演示 — 此处展示多角度风控排查的结果。" },
+    dual_verdict: { title: "双重视角裁决", content: "Demo 演示 — 此处展示段永平+芒格双视角交叉验证结果。" },
+    final_judgment: { title: "综合判定", content: "Demo 演示 — 此处展示综合判定结论及置信度。注意：以上内容均为 Demo 示例，不代表任何真实投资建议。" },
   },
 };
 
 function ReportContent() {
   const params = useSearchParams();
-  const ticker = params.get("ticker") || "贵州茅台";
+  const ticker = params.get("ticker") || "Demo";
   const taskId = params.get("task");
 
   const [data, setData] = useState<ReportData | null>(taskId ? null : MOCK);

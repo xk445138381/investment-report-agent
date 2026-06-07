@@ -110,72 +110,94 @@ class Orchestrator:
                 result["ticker"] = code + suffix
                 result["company_name"] = code + suffix
 
-        # Try bare known Chinese company names, e.g. "贵州茅台".
+        # Try Chinese company name → ticker resolution.
+        # Order: static maps → EastMoney search API (free, public)
         if not result["ticker"]:
-            raw_name = user_message.strip()
-            if re.fullmatch(r'[一-鿿A-Za-z0-9·（）()\-]{2,20}', raw_name) and re.search(r'[一-鿿]', raw_name):
-                try:
-                    from providers.qveris_provider import COMPANY_NAMES, HK_NAME_MAP
-                    candidates = []
-                    for mapping in (COMPANY_NAMES, HK_NAME_MAP):
-                        for ticker, name in mapping.items():
-                            if raw_name == name or raw_name in name or name in raw_name:
-                                candidates.append(ticker)
-                    if candidates:
-                        ticker = next((t for t in candidates if "." in t), candidates[0])
-                        if ticker.isdigit() and len(ticker) == 6:
-                            ticker = ticker + (".SH" if ticker.startswith("6") else ".SZ")
-                        elif ticker.isdigit() and len(ticker) <= 5:
-                            ticker = f"{int(ticker):04d}.HK"
-                        result["ticker"] = ticker
-                        result["company_name"] = raw_name
-                except ImportError:
-                    pass
-
-        # Try Chinese company name after action keywords
-        if not result["ticker"]:
-            name_match = re.search(
+            # Extract a bare Chinese name or a name after action keywords
+            bare_match = re.fullmatch(r'[一-鿿A-Za-z0-9·（）()\-\]{2,20}', user_message.strip()) and re.search(r'[一-鿿]', user_message.strip())
+            kw_match = re.search(
                 r'(?:分析|看下?|研究|对比|聊聊|看看)\s*([一-鿿]{2,8}(?:公司|集团|股份|科技|银行|保险|证券|控股|实业|医药|汽车|能源|地产)?)',
                 user_message
             )
-            if name_match and len(name_match.group(1)) >= 2:
-                result["company_name"] = name_match.group(1)
-                result["ticker"] = name_match.group(1)
-
-        # Resolve company name from ticker lookup
-        if result["ticker"] and (not result["company_name"] or result["company_name"] == result["ticker"]):
-            try:
-                from providers.qveris_provider import COMPANY_NAMES
-                name = COMPANY_NAMES.get(result["ticker"])
-                if name:
-                    result["company_name"] = name
+            raw_name = (user_message.strip() if bare_match else
+                        (kw_match.group(1) if (kw_match and len(kw_match.group(1)) >= 2) else None))
+            if raw_name:
+                resolved_ticker = await self._resolve_company_name(raw_name)
+                if resolved_ticker:
+                    result["ticker"] = resolved_ticker
+                    result["company_name"] = raw_name
                 else:
-                    # Try Sina HTTP for CN stock name (fast, works for all A-shares)
-                    try:
-                        import requests
-                        code = result["ticker"].split(".")[0]
-                        prefix = "sh" if code.startswith("6") else "sz"
-                        r = requests.get(f"https://hq.sinajs.cn/list={prefix}{code}",
-                                        headers={"Referer": "https://finance.sina.com.cn"},
-                                        timeout=5)
-                        if r.status_code == 200 and '="' in r.text:
-                            # Format: var hq_str_sh600519="贵州茅台,1680.00,..."
-                            parts = r.text.split('="')[1].split(",")
-                            if parts and parts[0]:
-                                result["company_name"] = parts[0]
-                    except Exception:
-                        pass
-            except ImportError:
-                pass
+                    result["company_name"] = raw_name  # prevent generic error overwrite
+                    result["error"] = (
+                        f"未找到「{raw_name}」对应的股票代码。"
+                        f"请直接输入代码（如 600519.SH、000858.SZ）或 6 位数字。"
+                        f"已尝试：公司名映射、东方财富搜索。"
+                    )
 
         if not result["ticker"] and not result["company_name"]:
-            # Smart intent recognition — guide users to supported inputs
-            hint = _classify_intent(user_message)
-            result["error"] = hint
+            result["error"] = "无法识别公司名称或股票代码，请提供具体的公司名或代码（如 600519.SH 或 贵州茅台）"
 
         return result
 
-    # ── Pipeline execution ─────────────────────────────────────────
+    async def _resolve_company_name(self, raw_name: str) -> str | None:
+        """Resolve a Chinese company name to a ticker.
+
+        Tries:
+        1. Static COMPANY_NAMES / HK_NAME_MAP (fast, no network)
+        2. EastMoney public search API (free, covers all A-shares)
+        """
+        import re as _re
+
+        # 1. Static map lookup
+        try:
+            from providers.qveris_provider import COMPANY_NAMES, HK_NAME_MAP
+            candidates = []
+            for mapping in (COMPANY_NAMES, HK_NAME_MAP):
+                for tk, nm in mapping.items():
+                    if raw_name == nm or raw_name in nm or nm in raw_name:
+                        candidates.append(tk)
+            if candidates:
+                tk = next((t for t in candidates if "." in t), candidates[0])
+                if tk.isdigit() and len(tk) == 6:
+                    tk = tk + (".SH" if tk.startswith("6") else ".SZ")
+                elif tk.isdigit() and len(tk) <= 5:
+                    tk = f"{int(tk):04d}.HK"
+                if "." in tk:
+                    logger.info(f"name→ticker (static): {raw_name} → {tk}")
+                    return tk
+        except ImportError:
+            pass
+
+        # 2. EastMoney public search API — free, no auth, covers ~5000 A-shares
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=5) as c:
+                r = await c.get(
+                    "https://searchadapter.eastmoney.com/api/suggest/get",
+                    params={"input": raw_name, "type": "14"},
+                    headers={"User-Agent": "investment-report-agent/0.1"},
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    table = data.get("QuotationCodeTable", {})
+                    hits = table.get("Data", []) or []
+                    for item in hits:
+                        code = str(item.get("Code", ""))
+                        mkt = str(item.get("Market", "")).lower()
+                        nm = item.get("Name", "")
+                        # Market may be None — infer from code prefix
+                        effective_mkt = mkt if mkt in ("sh", "sz") else ("sh" if code.startswith("6") else "sz")
+                        if code and len(code) == 6 and effective_mkt in ("sh", "sz"):
+                            tk = code + (".SH" if effective_mkt == "sh" else ".SZ")
+                            # Require reasonably close name match
+                            if nm == raw_name or raw_name in nm or nm in raw_name:
+                                logger.info(f"name→ticker (eastmoney): {raw_name} → {tk}")
+                                return tk
+        except Exception as e:
+            logger.info(f"EastMoney search failed for {raw_name}: {e}")
+
+        logger.info(f"name→ticker FAILED: {raw_name} not found in static maps or EastMoney search")
+        return None
 
     async def execute_pipeline(self, ctx: AgentContext) -> dict:
         """Execute the full report generation pipeline.
